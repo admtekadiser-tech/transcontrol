@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TransControl — Gestión de Rutas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --negro: #0f1117; --gris-oscuro: #1a1d27; --gris-medio: #252836;
+    --gris-borde: #2e3144; --blanco: #f0f2f8; --blanco-suave: #a8adc4;
+    --azul: #3b82f6; --verde: #22c55e; --amarillo: #f59e0b;
+    --naranja: #f97316; --rojo: #ef4444; --morado: #8b5cf6;
+  }
+  body { font-family: 'Inter', sans-serif; background: var(--negro); color: var(--blanco); min-height: 100vh; }
+
+  #pantalla-login { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; background:linear-gradient(160deg,#0f1117 60%,#1a1d27 100%); }
+  .logo-login { font-size:13px; font-weight:700; letter-spacing:4px; color:var(--azul); text-transform:uppercase; margin-bottom:8px; }
+  .titulo-login { font-size:28px; font-weight:800; margin-bottom:6px; text-align:center; }
+  .fecha-login { font-size:14px; color:var(--blanco-suave); margin-bottom:30px; text-align:center; }
+  .card-login { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:16px; padding:32px 28px; width:100%; max-width:360px; }
+  .label { font-size:12px; font-weight:600; color:var(--blanco-suave); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; display:block; }
+  select, input[type="text"], input[type="time"], input[type="date"], textarea {
+    width:100%; background:var(--gris-medio); border:1px solid var(--gris-borde);
+    border-radius:10px; color:var(--blanco); font-family:'Inter',sans-serif;
+    font-size:15px; padding:13px 16px; outline:none; transition:border-color .2s; -webkit-appearance:none;
+  }
+  select option { background: var(--gris-oscuro); }
+  select:focus, input:focus, textarea:focus { border-color:var(--azul); }
+  .btn { width:100%; padding:15px; border-radius:12px; border:none; font-family:'Inter',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:opacity .15s,transform .1s; margin-top:16px; }
+  .btn:active { transform:scale(.97); }
+  .btn-azul { background:var(--azul); color:#fff; }
+
+  .topbar { background:var(--gris-oscuro); border-bottom:1px solid var(--gris-borde); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; }
+  .topbar-nombre { font-weight:700; font-size:16px; }
+  .topbar-rol { font-size:11px; color:var(--azul); font-weight:600; letter-spacing:1px; text-transform:uppercase; }
+  .topbar-fecha { font-size:11px; color:var(--blanco-suave); margin-top:1px; }
+  .btn-salir { background:none; border:1px solid var(--gris-borde); color:var(--blanco-suave); border-radius:8px; padding:6px 12px; font-size:12px; cursor:pointer; font-family:'Inter',sans-serif; flex-shrink:0; }
+  .btn-sync { background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:var(--azul); border-radius:8px; padding:6px 12px; font-size:11px; cursor:pointer; font-family:'Inter',sans-serif; font-weight:600; flex-shrink:0; }
+
+  #pantalla-conductor, #pantalla-admin { display:none; padding-bottom:40px; }
+  .seccion { padding:18px 20px 0; }
+  .seccion-titulo { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--blanco-suave); margin-bottom:14px; }
+
+  .loading-overlay { position:fixed; inset:0; background:var(--negro); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:500; gap:14px; }
+  .loading-spinner { width:36px; height:36px; border:3px solid var(--gris-borde); border-top-color:var(--azul); border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-texto { font-size:13px; color:var(--blanco-suave); }
+
+  /* RUTA CARD (conductor) */
+  .ruta-grupo { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:16px; margin-bottom:16px; overflow:hidden; }
+  .ruta-grupo-header { background:linear-gradient(135deg, rgba(59,130,246,.15), rgba(139,92,246,.08)); padding:16px 18px; border-bottom:1px solid var(--gris-borde); }
+  .ruta-grupo-nombre { font-size:17px; font-weight:800; margin-bottom:6px; }
+  .ruta-grupo-meta { display:flex; gap:16px; flex-wrap:wrap; }
+  .ruta-grupo-meta-item { font-size:12px; color:var(--blanco-suave); }
+  .ruta-grupo-meta-item strong { color:var(--azul); }
+
+  .pdf-card { background: rgba(139,92,246,.08); border:1px solid rgba(139,92,246,.25); border-radius:10px; padding:12px 14px; margin:12px 18px 0; display:flex; align-items:center; gap:12px; }
+  .pdf-card-icono { font-size:24px; flex-shrink:0; }
+  .pdf-card-info { flex:1; }
+  .pdf-card-titulo { font-size:10px; font-weight:700; color:var(--morado); letter-spacing:1px; text-transform:uppercase; }
+  .pdf-card-nombre { font-size:12px; font-weight:600; color:var(--blanco); }
+  .btn-descargar-pdf { background: var(--morado); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-family:'Inter',sans-serif; font-size:11px; font-weight:700; cursor:pointer; flex-shrink:0; text-decoration:none; }
+
+  .obs-card { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25); border-radius:10px; padding:12px 14px; margin:12px 18px 0; }
+  .obs-card-titulo { font-size:10px; font-weight:700; color:var(--amarillo); letter-spacing:1px; text-transform:uppercase; margin-bottom:5px; }
+  .obs-card-texto { font-size:13px; color:var(--blanco); line-height:1.5; }
+
+  .ruta-grupo-paradas { padding:14px 18px 18px; }
+
+  .parada-card { background:var(--gris-medio); border:1px solid var(--gris-borde); border-radius:12px; margin-bottom:10px; overflow:hidden; }
+  .parada-card:last-child { margin-bottom:0; }
+  .parada-header { padding:13px 14px; display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+  .parada-numero { width:28px; height:28px; border-radius:50%; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0; border:2px solid var(--gris-borde); }
+  .parada-info { flex:1; min-width:0; }
+  .parada-destino { font-weight:700; font-size:14px; }
+  .parada-direccion { font-size:11px; color:var(--azul); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .parada-estado-badge { font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; text-transform:uppercase; flex-shrink:0; }
+  .estado-pendiente { background:rgba(255,255,255,.07); color:var(--blanco-suave); }
+  .estado-en-curso { background:rgba(245,158,11,.15); color:var(--amarillo); }
+  .estado-completado { background:rgba(34,197,94,.12); color:var(--verde); }
+  .parada-body { padding:0 14px 14px; display:none; }
+  .parada-body.abierto { display:block; }
+
+  .dir-completa { background:var(--gris-oscuro); border-radius:10px; padding:11px 13px; margin-bottom:11px; display:flex; gap:10px; align-items:flex-start; }
+  .dir-completa-texto { font-size:12px; color:var(--blanco); line-height:1.5; }
+  .btn-maps { display:inline-block; margin-top:6px; font-size:11px; font-weight:700; color:var(--azul); text-decoration:none; background:rgba(59,130,246,.12); padding:4px 10px; border-radius:6px; }
+
+  .botones-registro { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:11px; }
+  .btn-registro { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:10px; padding:11px 8px; text-align:center; cursor:pointer; transition:all .2s; font-family:'Inter',sans-serif; }
+  .btn-registro:active { transform:scale(.95); }
+  .btn-registro .icono { font-size:18px; margin-bottom:3px; }
+  .btn-registro .etiqueta { font-size:10px; font-weight:600; color:var(--blanco-suave); }
+  .btn-registro .hora-reg { font-size:12px; font-weight:700; color:var(--verde); margin-top:2px; }
+  .btn-registro.registrado { border-color:var(--verde); background:rgba(34,197,94,.08); }
+
+  .separador { height:1px; background:var(--gris-borde); margin:11px 0; }
+  .fila-accion { margin-bottom:10px; }
+  .fila-accion label { font-size:10px; font-weight:600; color:var(--blanco-suave); letter-spacing:1px; text-transform:uppercase; display:block; margin-bottom:5px; }
+  textarea { resize:none; min-height:65px; font-size:13px; }
+
+  .input-foto { background:var(--gris-oscuro); border:2px dashed var(--gris-borde); border-radius:10px; padding:14px; text-align:center; cursor:pointer; }
+  .input-foto input { display:none; }
+  .input-foto .icono-foto { font-size:22px; margin-bottom:4px; }
+  .input-foto .texto-foto { font-size:11px; color:var(--blanco-suave); }
+  .preview-foto { width:100%; border-radius:8px; margin-top:8px; max-height:160px; object-fit:cover; display:none; }
+
+  .btn-enviar-parada { width:100%; padding:12px; border-radius:10px; border:none; background:var(--verde); color:#fff; font-family:'Inter',sans-serif; font-size:13px; font-weight:700; cursor:pointer; margin-top:11px; }
+  .aviso-enviado { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.3); border-radius:10px; padding:11px; text-align:center; font-size:12px; font-weight:600; color:var(--verde); margin-top:9px; }
+
+  #pantalla-admin .admin-topbar { background:var(--gris-oscuro); border-bottom:1px solid var(--gris-borde); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; gap:10px; }
+  .admin-titulo { font-weight:800; font-size:17px; }
+  .admin-subtitulo { font-size:11px; color:var(--azul); font-weight:600; letter-spacing:1px; text-transform:uppercase; }
+  .admin-fecha { font-size:11px; color:var(--blanco-suave); }
+  .admin-topbar-right { display:flex; gap:8px; align-items:center; }
+
+  .tabs { display:flex; border-bottom:1px solid var(--gris-borde); background:var(--gris-oscuro); padding:0 20px; position:sticky; top:61px; z-index:9; overflow-x:auto; }
+  .tab { padding:13px 12px; font-size:13px; font-weight:600; color:var(--blanco-suave); cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+  .tab.activo { color:var(--azul); border-bottom-color:var(--azul); }
+  .tab-contenido { display:none; padding:20px; }
+  .tab-contenido.activo { display:block; }
+
+  .resumen-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px; }
+  .stat-card { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:12px; padding:12px; text-align:center; }
+  .stat-numero { font-size:24px; font-weight:800; }
+  .stat-label { font-size:10px; color:var(--blanco-suave); margin-top:2px; }
+  .stat-azul { color:var(--azul); } .stat-verde { color:var(--verde); } .stat-rojo { color:var(--rojo); }
+
+  .conductor-row { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:14px; margin-bottom:10px; overflow:hidden; }
+  .conductor-header { padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; }
+  .avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,var(--azul),var(--morado)); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; flex-shrink:0; }
+  .conductor-nombre { font-weight:700; font-size:14px; }
+  .conductor-estado { font-size:11px; color:var(--blanco-suave); margin-top:1px; }
+  .conductor-badges { margin-left:auto; display:flex; gap:6px; align-items:center; }
+  .badge-paradas { font-size:11px; font-weight:700; background:var(--gris-medio); border-radius:6px; padding:3px 8px; color:var(--blanco-suave); }
+  .badge-incidencia { font-size:11px; font-weight:700; background:rgba(239,68,68,.15); border-radius:6px; padding:3px 8px; color:var(--rojo); }
+  .conductor-detalle { display:none; padding:0 16px 16px; }
+  .conductor-detalle.abierto { display:block; }
+
+  .ruta-mini-bloque { background:var(--gris-medio); border-radius:10px; padding:12px; margin-bottom:8px; }
+  .ruta-mini-bloque-titulo { font-size:12px; font-weight:700; color:var(--azul); margin-bottom:8px; }
+  .parada-mini { display:flex; align-items:flex-start; gap:10px; padding:7px 0; border-bottom:1px solid var(--gris-borde); }
+  .parada-mini:last-child { border-bottom:none; }
+  .dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+  .dot-pendiente { background:var(--gris-borde); } .dot-curso { background:var(--amarillo); } .dot-ok { background:var(--verde); }
+  .parada-mini-info { flex:1; }
+  .parada-mini-destino { font-size:12px; font-weight:600; }
+  .parada-mini-horas { font-size:10px; color:var(--blanco-suave); margin-top:2px; }
+  .incidencia-tag { font-size:10px; background:rgba(239,68,68,.12); color:var(--rojo); padding:2px 6px; border-radius:4px; font-weight:600; display:inline-block; margin-top:3px; }
+
+  .tabla-wrap { overflow-x:auto; }
+  .tabla-registro { width:100%; border-collapse:collapse; font-size:12px; min-width:700px; }
+  .tabla-registro th { text-align:left; padding:9px 10px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--blanco-suave); border-bottom:1px solid var(--gris-borde); }
+  .tabla-registro td { padding:9px 10px; border-bottom:1px solid var(--gris-borde); vertical-align:top; }
+  .hora-celda { font-weight:700; color:var(--azul); }
+  .sin-hora { color:var(--gris-borde); }
+
+  .form-ruta { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:14px; padding:18px; margin-bottom:18px; }
+  .form-ruta h3 { font-size:14px; font-weight:700; margin-bottom:14px; }
+  .campo-grupo { margin-bottom:12px; }
+  .campo-grupo label { font-size:11px; font-weight:600; color:var(--blanco-suave); letter-spacing:1px; text-transform:uppercase; display:block; margin-bottom:6px; }
+  .fila-2col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  .upload-pdf { background:var(--gris-medio); border:2px dashed rgba(139,92,246,.4); border-radius:10px; padding:14px; text-align:center; cursor:pointer; }
+  .upload-pdf input { display:none; }
+  .upload-pdf-icono { font-size:22px; margin-bottom:3px; }
+  .upload-pdf-texto { font-size:11px; color:var(--blanco-suave); }
+  .pdf-adjunto { background:rgba(139,92,246,.1); border:1px solid rgba(139,92,246,.3); border-radius:8px; padding:9px 13px; margin-top:7px; display:flex; align-items:center; gap:10px; }
+  .pdf-adjunto-nombre { font-size:12px; font-weight:600; flex:1; }
+  .btn-quitar-pdf { background:none; border:none; color:var(--rojo); cursor:pointer; font-size:15px; }
+
+  .parada-bloque { background:var(--gris-medio); border:1px solid var(--gris-borde); border-radius:10px; padding:13px; margin-bottom:9px; position:relative; }
+  .parada-bloque-titulo { font-size:10px; font-weight:700; color:var(--azul); letter-spacing:1px; text-transform:uppercase; margin-bottom:9px; }
+  .parada-bloque input { margin-bottom:7px; }
+  .parada-bloque input:last-child { margin-bottom:0; }
+  .btn-quitar-bloque { position:absolute; top:11px; right:11px; background:rgba(239,68,68,.15); border:none; color:var(--rojo); border-radius:6px; padding:3px 7px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; }
+
+  .btn-agregar-parada { background:none; border:1px dashed var(--gris-borde); color:var(--blanco-suave); border-radius:8px; padding:9px; width:100%; font-family:'Inter',sans-serif; font-size:12px; cursor:pointer; margin-bottom:12px; }
+  .btn-crear-ruta { background:var(--azul); color:#fff; border:none; border-radius:10px; padding:13px; font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; width:100%; }
+
+  .ruta-item { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:12px; padding:14px 16px; margin-bottom:10px; }
+  .ruta-item-header { display:flex; align-items:center; gap:8px; margin-bottom:9px; flex-wrap:wrap; }
+  .ruta-conductor-tag { font-size:11px; font-weight:700; background:rgba(59,130,246,.15); color:var(--azul); padding:3px 8px; border-radius:6px; }
+  .ruta-nombre-tag { font-size:11px; font-weight:700; background:rgba(139,92,246,.15); color:var(--morado); padding:3px 8px; border-radius:6px; }
+  .ruta-hora-tag { font-size:11px; font-weight:700; background:rgba(245,158,11,.15); color:var(--amarillo); padding:3px 8px; border-radius:6px; }
+  .ruta-fecha-tag { font-size:11px; font-weight:700; background:rgba(34,197,94,.12); color:var(--verde); padding:3px 8px; border-radius:6px; }
+  .ruta-paradas-list { font-size:12px; color:var(--blanco-suave); line-height:1.9; }
+  .ruta-obs { font-size:12px; color:var(--amarillo); margin-top:8px; padding-top:8px; border-top:1px solid var(--gris-borde); }
+  .btn-reasignar { background:rgba(249,115,22,.12); border:1px solid rgba(249,115,22,.3); color:var(--naranja); border-radius:8px; padding:5px 10px; font-family:'Inter',sans-serif; font-size:11px; font-weight:700; cursor:pointer; }
+  .btn-eliminar-ruta { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.3); color:var(--rojo); border-radius:8px; padding:5px 10px; font-family:'Inter',sans-serif; font-size:11px; font-weight:700; cursor:pointer; }
+
+  .incidencia-card { background:var(--gris-oscuro); border:1px solid rgba(239,68,68,.25); border-radius:12px; padding:14px 16px; margin-bottom:10px; }
+  .incidencia-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .incidencia-conductor { font-weight:700; font-size:14px; }
+  .incidencia-hora-txt { font-size:11px; color:var(--blanco-suave); margin-left:auto; }
+  .incidencia-texto { font-size:13px; color:var(--blanco-suave); line-height:1.6; margin-bottom:8px; }
+  .incidencia-foto { width:100%; max-height:160px; object-fit:cover; border-radius:8px; }
+
+  .empty-state { text-align:center; padding:36px 20px; color:var(--blanco-suave); font-size:14px; }
+  .empty-icono { font-size:34px; margin-bottom:10px; }
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--verde); color:#fff; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px; z-index:999; display:none; box-shadow:0 4px 20px rgba(34,197,94,.4); white-space:nowrap; max-width:90vw; text-align:center; }
+  .chevron { transition:transform .2s; display:inline-block; color:var(--blanco-suave); }
+  .chevron.girado { transform:rotate(180deg); }
+
+  .config-seccion { margin-bottom:24px; }
+  .config-seccion-titulo { font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--blanco-suave); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--gris-borde); }
+  .conductor-config-row { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+  .conductor-config-info { flex:1; }
+  .conductor-config-nombre { font-weight:700; font-size:14px; }
+  .conductor-config-pin { font-size:12px; color:var(--blanco-suave); margin-top:2px; }
+  .btn-eliminar-conductor { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.2); color:var(--rojo); border-radius:8px; padding:5px 10px; font-family:Inter,sans-serif; font-size:12px; font-weight:600; cursor:pointer; }
+  .form-nuevo { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .form-nuevo h4 { font-size:13px; font-weight:700; margin-bottom:12px; }
+  .fila-3col { display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:end; }
+  .btn-añadir { background:var(--azul); border:none; color:#fff; border-radius:8px; padding:13px 16px; font-family:Inter,sans-serif; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .cliente-config-row { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:10px; padding:10px 14px; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
+  .cliente-config-info { flex:1; }
+  .cliente-config-nombre { font-weight:600; font-size:13px; }
+  .cliente-config-dir { font-size:11px; color:var(--blanco-suave); margin-top:2px; }
+  .btn-resetear { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.3); color:var(--rojo); border-radius:10px; padding:13px; font-family:Inter,sans-serif; font-size:14px; font-weight:700; cursor:pointer; width:100%; margin-bottom:10px; }
+  .aviso-reset { background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.2); border-radius:10px; padding:12px; font-size:13px; color:var(--blanco-suave); line-height:1.6; }
+  .cal-info { background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.2); border-radius:10px; padding:12px 14px; font-size:13px; color:var(--blanco-suave); line-height:1.6; margin-bottom:12px; }
+  .cal-info strong { color:var(--azul); }
+
+  .parada-bloque-tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .parada-tab { flex:1; padding:7px; border-radius:8px; border:1px solid var(--gris-borde); background:none; color:var(--blanco-suave); font-family:'Inter',sans-serif; font-size:11px; font-weight:600; cursor:pointer; }
+  .parada-tab.activo { background:var(--azul); border-color:var(--azul); color:#fff; }
+  .modo-manual { display:none; }
+  .cliente-resultado { background:var(--gris-oscuro); border:1px solid var(--azul); border-radius:0 0 10px 10px; position:absolute; top:100%; left:0; right:0; z-index:20; max-height:180px; overflow-y:auto; display:none; }
+  .cliente-select-wrap { position:relative; }
+  .cliente-opcion { padding:9px 13px; cursor:pointer; font-size:12px; border-bottom:1px solid var(--gris-borde); }
+  .cliente-opcion:hover { background:rgba(59,130,246,.15); }
+  .cliente-opcion-nombre { font-weight:600; }
+  .cliente-opcion-dir { font-size:10px; color:var(--blanco-suave); margin-top:1px; }
+  .btn-guardar-cliente { background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.3); color:var(--verde); border-radius:8px; padding:7px 12px; font-family:'Inter',sans-serif; font-size:11px; font-weight:600; cursor:pointer; margin-top:6px; width:100%; }
+
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:100; display:none; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.activo { display:flex; }
+  .modal { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:16px; padding:24px; width:100%; max-width:360px; }
+  .modal-titulo { font-size:16px; font-weight:800; margin-bottom:6px; }
+  .modal-subtitulo { font-size:13px; color:var(--blanco-suave); margin-bottom:18px; line-height:1.5; }
+  .modal-btns { display:flex; gap:10px; margin-top:16px; }
+  .btn-modal-cancel { flex:1; padding:12px; border-radius:10px; border:1px solid var(--gris-borde); background:none; color:var(--blanco-suave); font-family:'Inter',sans-serif; font-size:14px; font-weight:600; cursor:pointer; }
+  .btn-modal-ok { flex:1; padding:12px; border-radius:10px; border:none; background:var(--naranja); color:#fff; font-family:'Inter',sans-serif; font-size:14px; font-weight:700; cursor:pointer; }
+  .btn-modal-rojo { flex:1; padding:12px; border-radius:10px; border:none; background:var(--rojo); color:#fff; font-family:Inter,sans-serif; font-size:14px; font-weight:700; cursor:pointer; }
+  .modal-rojo { border-color:rgba(239,68,68,.3); }
+
+  .pin-dots { display:flex; justify-content:center; gap:12px; margin:20px 0; }
+  .pin-dot { width:16px; height:16px; border-radius:50%; background:var(--gris-borde); }
+  .pin-dot.lleno { background:var(--azul); }
+  .pin-teclado { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .pin-btn { background:var(--gris-medio); border:1px solid var(--gris-borde); border-radius:12px; padding:16px; font-family:'Inter',sans-serif; font-size:20px; font-weight:700; color:var(--blanco); cursor:pointer; text-align:center; }
+  .pin-btn:active { transform:scale(.93); background:var(--azul); border-color:var(--azul); }
+  .pin-btn-borrar { font-size:16px; color:var(--blanco-suave); }
+  .pin-btn-vacio { background:none; border:none; cursor:default; }
+  .pin-error { color:var(--rojo); font-size:13px; font-weight:600; text-align:center; margin-top:8px; min-height:18px; }
+  .pin-label-usuario { font-size:15px; font-weight:700; text-align:center; margin-bottom:4px; }
+  .pin-label-sub { font-size:12px; color:var(--blanco-suave); text-align:center; margin-bottom:16px; }
+
+  @media(min-width:600px) {
+    .botones-registro { grid-template-columns:repeat(4,1fr); }
+    .resumen-stats { grid-template-columns:repeat(6,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-texto" id="loading-texto">Cargando datos compartidos...</div>
+</div>
+
+<!-- LOGIN -->
+<div id="pantalla-login">
+  <div class="logo-login">TransControl</div>
+  <div class="titulo-login">Gestión de Rutas</div>
+  <div class="fecha-login" id="fecha-login"></div>
+  <div class="card-login" id="paso-seleccion">
+    <label class="label">¿Quién eres?</label>
+    <select id="select-conductor"><option value="">— Selecciona tu nombre —</option></select>
+    <button class="btn btn-azul" onclick="irAPin()">Continuar →</button>
+  </div>
+  <div class="card-login" id="paso-pin" style="display:none">
+    <div class="pin-label-usuario" id="pin-nombre-usuario"></div>
+    <div class="pin-label-sub">Introduce tu PIN de 4 dígitos</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-teclado">
+      <button class="pin-btn" onclick="pinPulsar('1')">1</button>
+      <button class="pin-btn" onclick="pinPulsar('2')">2</button>
+      <button class="pin-btn" onclick="pinPulsar('3')">3</button>
+      <button class="pin-btn" onclick="pinPulsar('4')">4</button>
+      <button class="pin-btn" onclick="pinPulsar('5')">5</button>
+      <button class="pin-btn" onclick="pinPulsar('6')">6</button>
+      <button class="pin-btn" onclick="pinPulsar('7')">7</button>
+      <button class="pin-btn" onclick="pinPulsar('8')">8</button>
+      <button class="pin-btn" onclick="pinPulsar('9')">9</button>
+      <button class="pin-btn pin-btn-vacio" onclick="volverSeleccion()">← Volver</button>
+      <button class="pin-btn" onclick="pinPulsar('0')">0</button>
+      <button class="pin-btn pin-btn-borrar" onclick="pinBorrar()">⌫</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- CONDUCTOR -->
+<div id="pantalla-conductor">
+  <div class="topbar">
+    <div>
+      <div class="topbar-rol">Conductor</div>
+      <div class="topbar-nombre" id="topbar-nombre"></div>
+      <div class="topbar-fecha" id="topbar-fecha"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-sync" onclick="recargarDatos()">⟳ Actualizar</button>
+      <button class="btn-salir" onclick="salir()">Salir</button>
+    </div>
+  </div>
+  <div class="seccion" style="margin-top:16px;">
+    <div class="seccion-titulo" id="titulo-rutas-conductor">Mis rutas de hoy</div>
+    <div id="lista-rutas-conductor"></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="pantalla-admin">
+  <div class="admin-topbar">
+    <div>
+      <div class="admin-subtitulo">Panel de control</div>
+      <div class="admin-titulo">Administración</div>
+      <div class="admin-fecha" id="admin-fecha"></div>
+    </div>
+    <div class="admin-topbar-right">
+      <button class="btn-sync" onclick="recargarDatos()">⟳ Actualizar</button>
+      <button class="btn-salir" onclick="salir()">Salir</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab activo" onclick="cambiarTab(0,this)">🔴 En Vivo</div>
+    <div class="tab" onclick="cambiarTab(1,this)">📋 Registro</div>
+    <div class="tab" onclick="cambiarTab(2,this)">🗺️ Rutas</div>
+    <div class="tab" onclick="cambiarTab(3,this)">⚠️ Incidencias</div>
+    <div class="tab" onclick="cambiarTab(4,this)">⚙️ Config</div>
+  </div>
+
+  <div class="tab-contenido activo" id="tab-0">
+    <div class="resumen-stats" id="stats-resumen"></div>
+    <div id="lista-conductores-admin"></div>
+  </div>
+
+  <div class="tab-contenido" id="tab-1">
+    <div class="tabla-wrap">
+      <table class="tabla-registro">
+        <thead><tr><th>Fecha</th><th>Conductor</th><th>Ruta</th><th>Cliente</th><th>Dirección</th><th>Llegada</th><th>Ini.Desc</th><th>Fin Desc</th><th>Salida</th><th>Estado</th></tr></thead>
+        <tbody id="tbody-registro"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tab-contenido" id="tab-2">
+    <div class="form-ruta">
+      <h3>➕ Asignar nueva ruta</h3>
+
+      <div class="campo-grupo">
+        <label>📅 Fecha del servicio</label>
+        <input type="date" id="admin-fecha-servicio">
+      </div>
+
+      <div class="fila-2col" style="margin-bottom:12px;">
+        <div class="campo-grupo" style="margin-bottom:0">
+          <label>Conductor</label>
+          <select id="admin-select-conductor"><option value="">— Selecciona —</option></select>
+        </div>
+        <div class="campo-grupo" style="margin-bottom:0">
+          <label>🕐 Hora de inicio</label>
+          <input type="time" id="admin-hora-inicio">
+        </div>
+      </div>
+
+      <div class="campo-grupo">
+        <label>🏷️ Nombre o número de ruta</label>
+        <input type="text" id="admin-nombre-ruta" placeholder="Ej: Ruta 1 — Reparto Carrefour">
+      </div>
+
+      <div class="campo-grupo">
+        <label>📄 PDF Cita de descarga</label>
+        <div class="upload-pdf" onclick="document.getElementById('input-pdf-admin').click()">
+          <input type="file" id="input-pdf-admin" accept="application/pdf" onchange="adjuntarPDF(this)">
+          <div class="upload-pdf-icono">📄</div>
+          <div class="upload-pdf-texto">Pulsa para adjuntar el PDF de la cita</div>
+        </div>
+        <div id="pdf-adjunto-preview" style="display:none" class="pdf-adjunto">
+          <span>📄</span><span class="pdf-adjunto-nombre" id="pdf-nombre-admin"></span>
+          <button class="btn-quitar-pdf" onclick="quitarPDF()">✕</button>
+        </div>
+      </div>
+
+      <div class="campo-grupo">
+        <label>⚠️ Observaciones para esta ruta</label>
+        <textarea id="admin-observaciones" placeholder="Ej: Coger matrícula 3011 y acular remolque 6452." style="min-height:60px"></textarea>
+      </div>
+
+      <div class="campo-grupo">
+        <label>Paradas de esta ruta</label>
+        <div id="inputs-paradas"></div>
+        <button class="btn-agregar-parada" onclick="agregarParada()">+ Añadir parada</button>
+      </div>
+
+      <button class="btn-crear-ruta" onclick="crearRuta()">Asignar ruta al conductor</button>
+    </div>
+
+    <div class="seccion-titulo" style="margin-bottom:12px;">Rutas asignadas</div>
+    <div id="rutas-creadas-lista"></div>
+  </div>
+
+  <div class="tab-contenido" id="tab-3">
+    <div id="lista-incidencias"></div>
+  </div>
+
+  <div class="tab-contenido" id="tab-4">
+    <div class="config-seccion">
+      <div class="config-seccion-titulo">🔄 Reseteo diario</div>
+      <div class="aviso-reset">Los datos históricos se guardan siempre en <strong>Google Sheets</strong> (pestaña Registros) y nunca se borran. El reseteo solo elimina las rutas activas de un día concreto.</div><br>
+      <div class="campo-grupo">
+        <label>Fecha de las rutas a resetear</label>
+        <input type="date" id="reset-fecha">
+      </div>
+      <button class="btn-resetear" onclick="abrirModalReset()">🗑️ Resetear rutas de esa fecha</button>
+    </div>
+
+    <div class="config-seccion">
+      <div class="config-seccion-titulo">📅 Google Calendar</div>
+      <div class="cal-info">Cada ruta crea un evento en Calendar con todas sus paradas. Se actualiza automáticamente al registrar horas.<br><br><strong>Para buscar quién estuvo en un cliente concreto</strong>, usa Google Sheets — es más rápido.</div>
+    </div>
+
+    <div class="config-seccion">
+      <div class="config-seccion-titulo">🚛 Gestión de conductores</div>
+      <div class="form-nuevo">
+        <h4>➕ Añadir conductor nuevo</h4>
+        <div style="margin-bottom:8px">
+          <label class="label">Nombre completo</label>
+          <input type="text" id="nuevo-conductor-nombre" placeholder="Ej: Juan García López">
+        </div>
+        <div class="fila-3col">
+          <div><label class="label">PIN (4 dígitos)</label><input type="text" id="nuevo-conductor-pin" placeholder="Ej: 1011" maxlength="4"></div>
+          <div></div>
+          <button class="btn-añadir" onclick="añadirConductorUI()">Añadir</button>
+        </div>
+      </div>
+      <div id="lista-conductores-config"></div>
+    </div>
+
+    <div class="config-seccion">
+      <div class="config-seccion-titulo">📋 Gestión de clientes guardados</div>
+      <div class="form-nuevo">
+        <h4>➕ Añadir cliente nuevo</h4>
+        <div style="margin-bottom:8px"><label class="label">Nombre del cliente</label><input type="text" id="nuevo-cliente-nombre" placeholder="Ej: Mercadona Getafe"></div>
+        <div class="fila-3col">
+          <div style="grid-column:1/3"><label class="label">Dirección</label><input type="text" id="nuevo-cliente-dir" placeholder="Ej: Ctra. de Toledo Km 11, Getafe"></div>
+          <button class="btn-añadir" onclick="añadirClienteUI()">Añadir</button>
+        </div>
+      </div>
+      <div id="lista-clientes-config"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REASIGNAR -->
+<div class="modal-overlay" id="modal-reasignar">
+  <div class="modal">
+    <div class="modal-titulo">🔄 Reasignar ruta</div>
+    <div class="modal-subtitulo" id="modal-reasignar-texto">¿A qué conductor quieres transferir esta ruta?</div>
+    <label class="label">Conductor sustituto</label>
+    <select id="modal-conductor-nuevo"><option value="">— Selecciona conductor —</option></select>
+    <div class="modal-btns">
+      <button class="btn-modal-cancel" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn-modal-ok" onclick="confirmarReasignacion()">Reasignar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RESET -->
+<div class="modal-overlay" id="modal-reset">
+  <div class="modal modal-rojo">
+    <div class="modal-titulo">🗑️ Resetear rutas</div>
+    <div class="modal-subtitulo">¿Eliminar todas las rutas activas de esa fecha? El histórico en Registros no se toca.</div>
+    <div class="modal-btns">
+      <button class="btn-modal-cancel" onclick="cerrarModalReset()">Cancelar</button>
+      <button class="btn-modal-rojo" onclick="confirmarReset()">Sí, eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR RUTA -->
+<div class="modal-overlay" id="modal-eliminar-ruta">
+  <div class="modal modal-rojo">
+    <div class="modal-titulo">🗑️ Eliminar ruta</div>
+    <div class="modal-subtitulo" id="modal-eliminar-texto">¿Eliminar esta ruta?</div>
+    <div class="modal-btns">
+      <button class="btn-modal-cancel" onclick="cerrarModalEliminarRuta()">Cancelar</button>
+      <button class="btn-modal-rojo" onclick="confirmarEliminarRuta()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// CONFIG — CAMBIA ESTA URL POR LA TUYA TRAS ACTUALIZAR EL APPS SCRIPT
+// ══════════════════════════════════════════
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzIXSbZte638r48vIFgdGGb3lt1OOfGrrgnSCd0gPXeUCrkad-_uuPqDu3irkrr1R7v/exec';
+
+// ══════════════════════════════════════════
+// ESTADO GLOBAL — TODO SE CARGA DESDE SHEETS
+// ══════════════════════════════════════════
+let usuarioActual = null;
+let PINES = {};
+let clientesGuardados = [];
+let rutasActivas = [];
+let incidencias = [];
+let pdfAdminData = null, pdfAdminNombre = '';
+let rutaAEliminar = null;
+let conductorAReasignar = null;
+
+// Almacén global de fotos — se llena en el momento de seleccionar, antes de que Safari las descarte
+const FOTOS_PENDIENTES = {};  // clave: "rutaId-pi-tipo" → base64
+
+// Comprimir imagen antes de guardar — reduce tamaño para enviar a Sheets
+function comprimirImagen(base64, maxWidth, calidad, callback) {
+  const img = new Image();
+  img.onload = function() {
+    const canvas = document.createElement('canvas');
+    let w = img.width, h = img.height;
+    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const comprimida = canvas.toDataURL('image/jpeg', calidad);
+    callback(comprimida);
+  };
+  img.src = base64;
+}
+
+function guardarFotoPendiente(rutaId, pi, tipo, base64) {
+  const clave = rutaId + '-' + pi + '-' + tipo;
+  if (base64 && base64.length > 100) {
+    FOTOS_PENDIENTES[clave] = base64;
+    console.log('[FOTO] Guardada OK clave=' + clave + ' tamaño=' + Math.round(base64.length/1024) + 'KB');
+  } else {
+    console.warn('[FOTO] Base64 vacío, no se guarda. clave=' + clave);
+  }
+}
+
+function obtenerFotoPendiente(rutaId, pi, tipo) {
+  const clave = rutaId + '-' + pi + '-' + tipo;
+  const val = FOTOS_PENDIENTES[clave] || '';
+  console.log('[FOTO] obtenerFotoPendiente clave=' + clave + ' longitud=' + val.length);
+  return val;
+}
+
+function limpiarFotosPendientes(rutaId, pi) {
+  delete FOTOS_PENDIENTES[rutaId + '-' + pi + '-foto'];
+  delete FOTOS_PENDIENTES[rutaId + '-' + pi + '-inc'];
+}
+
+function getRutaId(ri) {
+  const rutas = rutasDelConductorVisibles(usuarioActual);
+  return rutas[ri] ? rutas[ri].rutaId : 'sin-id-' + ri;
+}
+
+// ══════════════════════════════════════════
+// CARGA / SINCRONIZACIÓN CON SHEETS
+// ══════════════════════════════════════════
+async function cargarTodo(mostrarLoading) {
+  if (mostrarLoading) document.getElementById('loading-overlay').style.display='flex';
+  try {
+    const resp = await fetch(SHEETS_URL + '?accion=cargarTodo');
+    const data = await resp.json();
+    if (data.resultado === 'ok') {
+      PINES = { 'admin': '1994' };
+      (data.conductores||[]).forEach(c => PINES[c.nombre] = c.pin);
+      clientesGuardados = data.clientes || [];
+      rutasActivas = data.rutas || [];
+      incidencias = data.incidencias || [];
+    }
+  } catch(err) {
+    console.log('Error cargando:', err);
+    toast('No se pudo conectar con Sheets. Revisa tu conexión.', 'err');
+  }
+  if (mostrarLoading) document.getElementById('loading-overlay').style.display='none';
+  actualizarSelectsConductores();
+}
+
+async function recargarDatos() {
+  toast('Sincronizando...');
+  await cargarTodo(false);
+  if (usuarioActual === 'admin') renderAdmin();
+  else if (usuarioActual) renderConductor(usuarioActual);
+  toast('✓ Datos actualizados');
+}
+
+function enviarSheets(datos) {
+  return fetch(SHEETS_URL, {
+    method:'POST', mode:'no-cors',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(datos)
+  }).catch(err => console.log('Error Sheets:', err));
+}
+
+// ══════════════════════════════════════════
+// FECHA Y HORA
+// ══════════════════════════════════════════
+function fechaActual() { return new Date().toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long', year:'numeric'}); }
+function fechaCorta(d) { d = d || new Date(); return d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'}); }
+function fechaCortaManana() { const m = new Date(); m.setDate(m.getDate()+1); return fechaCorta(m); }
+function horaActual() { return new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); }
+function fechaInputHoy() { return new Date().toISOString().split('T')[0]; }
+function fechaInputManana() { const m = new Date(); m.setDate(m.getDate()+1); return m.toISOString().split('T')[0]; }
+function fechaInputAFechaCorta(strInput) {
+  const [y,m,d] = strInput.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function generarRutaId() {
+  return 'R' + Date.now() + Math.floor(Math.random()*1000);
+}
+
+// ══════════════════════════════════════════
+// NAVEGACIÓN / LOGIN
+// ══════════════════════════════════════════
+function listaConductores() { return Object.keys(PINES).filter(k => k !== 'admin'); }
+
+function actualizarSelectsConductores() {
+  const opciones = listaConductores().map(n => `<option>${n}</option>`).join('');
+  const sel = document.getElementById('select-conductor');
+  sel.innerHTML = '<option value="">— Selecciona tu nombre —</option><option value="admin">👤 ADMINISTRACIÓN</option>' + opciones;
+  const selAdmin = document.getElementById('admin-select-conductor');
+  if (selAdmin) selAdmin.innerHTML = '<option value="">— Selecciona —</option>' + opciones;
+  const selModal = document.getElementById('modal-conductor-nuevo');
+  if (selModal) selModal.innerHTML = '<option value="">— Selecciona conductor —</option>' + opciones;
+}
+
+let pinActual = '', pinUsuarioSeleccionado = '';
+
+function irAPin() {
+  const val = document.getElementById('select-conductor').value;
+  if (!val) { toast('Selecciona tu nombre','err'); return; }
+  pinUsuarioSeleccionado = val; pinActual = '';
+  actualizarDots();
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-nombre-usuario').textContent = val === 'admin' ? '👤 Administración' : val;
+  document.getElementById('paso-seleccion').style.display = 'none';
+  document.getElementById('paso-pin').style.display = 'block';
+}
+function volverSeleccion() {
+  document.getElementById('paso-pin').style.display = 'none';
+  document.getElementById('paso-seleccion').style.display = 'block';
+  pinActual=''; pinUsuarioSeleccionado='';
+}
+function pinPulsar(num) {
+  if (pinActual.length >= 4) return;
+  pinActual += num; actualizarDots();
+  if (pinActual.length === 4) setTimeout(validarPin, 150);
+}
+function pinBorrar() { pinActual = pinActual.slice(0,-1); actualizarDots(); document.getElementById('pin-error').textContent=''; }
+function actualizarDots() { for(let i=0;i<4;i++){ const d=document.getElementById('pd'+i); if(d) d.classList.toggle('lleno', i<pinActual.length); } }
+function validarPin() {
+  if (pinActual === PINES[pinUsuarioSeleccionado]) {
+    entrar(pinUsuarioSeleccionado);
+  } else {
+    document.getElementById('pin-error').textContent = '❌ PIN incorrecto';
+    pinActual=''; actualizarDots();
+  }
+}
+
+async function entrar(val) {
+  usuarioActual = val;
+  document.getElementById('pantalla-login').style.display='none';
+  document.getElementById('paso-pin').style.display='none';
+  document.getElementById('paso-seleccion').style.display='block';
+  if (val === 'admin') {
+    document.getElementById('pantalla-admin').style.display='block';
+    document.getElementById('admin-fecha').textContent = fechaActual();
+    document.getElementById('admin-fecha-servicio').value = fechaInputManana();
+    document.getElementById('reset-fecha').value = fechaInputHoy();
+    initParadas();
+    renderAdmin();
+  } else {
+    document.getElementById('topbar-nombre').textContent = val;
+    document.getElementById('topbar-fecha').textContent = fechaActual();
+    document.getElementById('pantalla-conductor').style.display='block';
+    renderConductor(val);
+  }
+}
+
+function salir() {
+  usuarioActual = null; pinActual=''; pinUsuarioSeleccionado='';
+  document.getElementById('pantalla-login').style.display='flex';
+  document.getElementById('paso-seleccion').style.display='block';
+  document.getElementById('paso-pin').style.display='none';
+  document.getElementById('pantalla-conductor').style.display='none';
+  document.getElementById('pantalla-admin').style.display='none';
+  document.getElementById('select-conductor').value='';
+}
+
+function cambiarTab(idx, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('activo'));
+  document.querySelectorAll('.tab-contenido').forEach(t=>t.classList.remove('activo'));
+  el.classList.add('activo');
+  document.getElementById('tab-'+idx).classList.add('activo');
+  if(idx===0) renderTiempoReal();
+  if(idx===1) renderTabla();
+  if(idx===2) renderRutasCreadas();
+  if(idx===3) renderIncidencias();
+  if(idx===4) renderConfig();
+}
+
+// ══════════════════════════════════════════
+// VISTA CONDUCTOR — agrupa rutas del conductor para la fecha de HOY
+// ══════════════════════════════════════════
+function normalizarFecha(str) {
+  if (!str) return '';
+  let s = String(str).trim();
+
+  // Formato ISO que devuelve Sheets cuando interpreta como fecha real: "2026-06-29T22:00:00.000Z"
+  if (s.includes('T') && s.includes('Z')) {
+    const d = new Date(s);
+    // Sumamos el offset para recuperar el día "real" que se quiso guardar (Sheets resta el huso horario)
+    const dLocal = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+    const dd = String(dLocal.getDate()).padStart(2,'0');
+    const mm = String(dLocal.getMonth()+1).padStart(2,'0');
+    const yy = dLocal.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  }
+
+  // Formato dd/mm/aaaa o variantes con espacios/guiones
+  s = s.split(' ')[0];
+  s = s.replace(/-/g, '/');
+  const partes = s.split('/');
+  if (partes.length !== 3) return s;
+  let [d, m, y] = partes;
+  // Si viene como aaaa/mm/dd (poco común pero posible), lo detectamos por longitud
+  if (d.length === 4) { const tmp = d; d = y; y = tmp; }
+  d = d.padStart(2, '0');
+  m = m.padStart(2, '0');
+  if (y.length === 2) y = '20' + y;
+  return `${d}/${m}/${y}`;
+}
+
+function normalizarNombre(str) {
+  return String(str || '').trim().toLowerCase();
+}
+
+function rutasDelConductorVisibles(nombre) {
+  const hoy = normalizarFecha(fechaCorta());
+  const manana = normalizarFecha(fechaCortaManana());
+  return rutasActivas.filter(r =>
+    normalizarNombre(r.conductor) === normalizarNombre(nombre) &&
+    (normalizarFecha(r.fechaServicio) === hoy || normalizarFecha(r.fechaServicio) === manana)
+  );
+}
+
+function rutasDelConductorHoy(nombre) {
+  const hoy = normalizarFecha(fechaCorta());
+  return rutasActivas.filter(r =>
+    normalizarNombre(r.conductor) === normalizarNombre(nombre) &&
+    normalizarFecha(r.fechaServicio) === hoy
+  );
+}
+
+function esRutaDeManana(ruta) {
+  const manana = normalizarFecha(fechaCortaManana());
+  return normalizarFecha(ruta.fechaServicio) === manana;
+}
+
+function renderConductor(nombre) {
+  const rutas = rutasDelConductorVisibles(nombre);
+  const cont = document.getElementById('lista-rutas-conductor');
+  document.getElementById('titulo-rutas-conductor').textContent = `Mis rutas (${fechaCorta()})`;
+
+  if (!rutas.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icono">🚛</div>No tienes rutas asignadas para hoy ni mañana.<br>Contacta con administración.</div>`;
+    return;
+  }
+
+  cont.innerHTML = rutas.map((ruta, ri) => {
+    const esManana = esRutaDeManana(ruta);
+    const mapsLinks = ruta.paradas.map((p,i) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.direccion)}`);
+    const completadas = ruta.paradas.filter(p=>p.enviado).length;
+
+    const pdfHtml = ruta.pdfNombre ? `
+      <div class="pdf-card">
+        <div class="pdf-card-icono">📄</div>
+        <div class="pdf-card-info"><div class="pdf-card-titulo">Cita de descarga</div><div class="pdf-card-nombre">${ruta.pdfNombre}</div></div>
+        ${ruta.pdfData ? `<a class="btn-descargar-pdf" href="${ruta.pdfData}" download="${ruta.pdfNombre}">⬇ Descargar</a>` : ''}
+      </div>` : '';
+
+    const obsHtml = (ruta.observaciones && ruta.observaciones.trim()) ? `
+      <div class="obs-card"><div class="obs-card-titulo">⚠️ Indicaciones de administración</div><div class="obs-card-texto">${ruta.observaciones}</div></div>` : '';
+
+    const bannerManana = esManana ? `
+      <div style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.3);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:22px">📅</span>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--morado);letter-spacing:1px;text-transform:uppercase;">Ruta para mañana — ${ruta.fechaServicio}</div>
+          <div style="font-size:12px;color:var(--blanco-suave);margin-top:3px;">Puedes consultar los detalles, pero el registro se activa el día del servicio.</div>
+        </div>
+      </div>` : '';
+
+    const paradasHtml = ruta.paradas.map((p,i) => {
+      const est = estadoParada(p);
+      const bloqueado = esManana;
+      return `
+      <div class="parada-card" id="pc-${ri}-${i}">
+        <div class="parada-header" onclick="toggleParada(${ri},${i})">
+          <div class="parada-numero" style="border-color:${bloqueado?'var(--morado)':colorEst(est)}">${i+1}</div>
+          <div class="parada-info">
+            <div class="parada-destino">${p.cliente}</div>
+            <div class="parada-direccion">📍 ${p.direccion||'Sin dirección'}</div>
+          </div>
+          <span class="parada-estado-badge ${bloqueado?'estado-pendiente':'estado-'+est}">${bloqueado?'📅 Mañana':labelEst(est)}</span>
+          <span class="chevron" id="chev-${ri}-${i}">▼</span>
+        </div>
+        <div class="parada-body" id="body-${ri}-${i}">
+          <div class="dir-completa">
+            <div>
+              <div class="dir-completa-texto"><strong>${p.cliente}</strong><br>${p.direccion||'Sin dirección'}</div>
+              <a href="${mapsLinks[i]}" target="_blank" class="btn-maps">Abrir en Google Maps →</a>
+            </div>
+          </div>
+          ${bloqueado ? `<div style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2);border-radius:10px;padding:14px;text-align:center;color:var(--morado);font-size:13px;font-weight:600;margin-bottom:4px;">🔒 Registro disponible el ${ruta.fechaServicio}</div>` : `<div class="botones-registro">`}
+          ${!bloqueado ? `
+            ${btnReg(ri,i,'llegada','🟡','Llegada',p.llegada)}
+            ${btnReg(ri,i,'inicioDesc','🔵','Ini. Descarga',p.inicioDesc)}
+            ${btnReg(ri,i,'finDesc','🟠','Fin Descarga',p.finDesc)}
+            ${btnReg(ri,i,'salida','🟢','Salida',p.salida)}
+          </div>
+          <div class="separador"></div>
+          <div class="fila-accion">
+            <label>⚠️ Incidencia (opcional)</label>
+            <textarea id="inc-${ri}-${i}" placeholder="Describe si hay algún problema...">${p.incidencia||''}</textarea>
+          </div>
+          <div class="fila-accion">
+            <label>📸 Foto de la incidencia (opcional)</label>
+            <div class="input-foto" onclick="document.getElementById('foto-inc-${ri}-${i}').click()">
+              <input type="file" id="foto-inc-${ri}-${i}" accept="image/*" capture="environment" onchange="prevFotoInc('${ruta.rutaId}',${i},this)">
+              <div class="icono-foto">📷</div>
+              <div class="texto-foto">${p.fotoIncidencia?'Foto adjunta ✓':'Foto de la incidencia (palet roto, avería...)'}</div>
+            </div>
+            <img id="prev-inc-${ri}-${i}" class="preview-foto" style="${p.fotoIncidencia&&p.fotoIncidencia.startsWith('data:')?'display:block':''}" src="${p.fotoIncidencia&&p.fotoIncidencia.startsWith('data:')?p.fotoIncidencia:''}">
+            ${p.fotoIncidencia&&!p.fotoIncidencia.startsWith('data:')?`<a href="${p.fotoIncidencia}" target="_blank" class="btn-maps" style="display:inline-block;margin-top:8px">📎 Ver foto incidencia en Drive →</a>`:''}
+          </div>
+          <div class="separador"></div>
+          <div class="fila-accion">
+            <label>📸 Foto del albarán</label>
+            <div class="input-foto" onclick="document.getElementById('foto-${ri}-${i}').click()">
+              <input type="file" id="foto-${ri}-${i}" accept="image/*" capture="environment" onchange="prevFoto('${ruta.rutaId}',${i},this)">
+              <div class="icono-foto">📷</div>
+              <div class="texto-foto">${p.foto?'Foto adjunta ✓':'Pulsa para fotografiar el albarán'}</div>
+            </div>
+            <img id="prev-${ri}-${i}" class="preview-foto" style="${p.foto&&p.foto.startsWith('data:')?'display:block':''}" src="${p.foto&&p.foto.startsWith('data:')?p.foto:''}">
+            ${p.foto&&!p.foto.startsWith('data:')?`<a href="${p.foto}" target="_blank" class="btn-maps" style="display:inline-block;margin-top:8px">📎 Ver albarán en Drive →</a>`:''}
+          </div>
+          ${p.enviado
+            ? `<div class="aviso-enviado">✓ Parada registrada</div>`
+            : `<button class="btn-enviar-parada" id="btn-registrar-${ruta.rutaId}-${i}" onclick="enviarParada('${ruta.rutaId}',${i},${ri})">Registrar parada</button>`
+          }` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="ruta-grupo" style="${esManana?'border-color:rgba(139,92,246,.3)':''}">
+      <div class="ruta-grupo-header" style="${esManana?'background:linear-gradient(135deg,rgba(139,92,246,.15),rgba(59,130,246,.05))':''}">
+        <div class="ruta-grupo-nombre">${ruta.nombreRuta || 'Ruta sin nombre'}</div>
+        <div class="ruta-grupo-meta">
+          ${ruta.horaInicio?`<div class="ruta-grupo-meta-item">🕐 Inicio: <strong>${ruta.horaInicio}</strong></div>`:''}
+          <div class="ruta-grupo-meta-item">📦 <strong>${esManana?ruta.paradas.length+' paradas':completadas+'/'+ruta.paradas.length+' completadas'}</strong></div>
+          <div class="ruta-grupo-meta-item" style="color:${esManana?'var(--morado)':'var(--verde)'}">📅 <strong>${esManana?'MAÑANA — '+ruta.fechaServicio:'HOY'}</strong></div>
+        </div>
+      </div>
+      ${bannerManana}
+      ${pdfHtml}
+      ${obsHtml}
+      <div class="ruta-grupo-paradas">${paradasHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function btnReg(ri, pi, campo, ico, label, valor) {
+  return `<div class="btn-registro ${valor?'registrado':''}" onclick="${valor?'':` registrarHora(${ri},${pi},'${campo}')`}">
+    <div class="icono">${ico}</div><div class="etiqueta">${label}</div><div class="hora-reg">${valor||'—'}</div>
+  </div>`;
+}
+
+function registrarHora(ri, pi, campo) {
+  const rutas = rutasDelConductorVisibles(usuarioActual);
+  if (!rutas[ri]) return;
+  const rutaId = rutas[ri].rutaId;
+  const ruta = rutasActivas.find(r => r.rutaId === rutaId);
+  if (!ruta) return;
+  const ahora = horaActual();
+  ruta.paradas[pi][campo] = ahora;
+  guardarRegistroSheets(usuarioActual, ruta, ruta.paradas[pi]);
+  guardarRutaSheets(ruta);
+  guardarCalendarSheets(ruta);
+  toast(`${labelCampo(campo)}: ${ahora}`);
+  renderConductor(usuarioActual);
+  setTimeout(()=>{
+    const body = document.getElementById(`body-${ri}-${pi}`);
+    const chev = document.getElementById(`chev-${ri}-${pi}`);
+    if (body) body.classList.add('abierto');
+    if (chev) chev.classList.add('girado');
+  },50);
+}
+
+function enviarParada(rutaId, pi, ri) {
+  const ruta = rutasActivas.find(r => r.rutaId === rutaId);
+  if (!ruta) return;
+  const p = ruta.paradas[pi];
+
+  p.incidencia = document.getElementById('inc-' + ri + '-' + pi).value;
+  p.enviado = true;
+
+  // Recuperar fotos del almacén global usando rutaId como clave estable
+  p.foto = obtenerFotoPendiente(rutaId, pi, 'foto');
+  p.fotoIncidencia = obtenerFotoPendiente(rutaId, pi, 'inc');
+
+  if (p.incidencia.trim()) {
+    const incObj = {
+      conductor: usuarioActual,
+      nombreRuta: ruta.nombreRuta,
+      cliente: p.cliente,
+      direccion: p.direccion,
+      texto: p.incidencia,
+      foto: p.fotoIncidencia || '',
+      hora: horaActual(),
+      fecha: fechaCorta()
+    };
+    incidencias.push(incObj);
+    guardarIncidenciaSheets(incObj);
+  }
+
+  guardarRegistroSheets(usuarioActual, ruta, p);
+  guardarRutaSheets(ruta);
+  guardarCalendarSheets(ruta);
+  // Enviar fotos por separado para evitar el límite de tamaño de Google
+  if (p.foto && p.foto.startsWith('data:')) {
+    enviarFotoSheets(rutaId, pi, 'albaran', p.foto, usuarioActual, ruta.fechaServicio, p.cliente);
+  }
+  if (p.fotoIncidencia && p.fotoIncidencia.startsWith('data:')) {
+    enviarFotoSheets(rutaId, pi, 'incidencia', p.fotoIncidencia, usuarioActual, ruta.fechaServicio, p.cliente);
+  }
+  limpiarFotosPendientes(rutaId, pi);
+  toast('✓ Parada registrada');
+  renderConductor(usuarioActual);
+}
+
+function _legacy_unused(ri, pi) {
+  // no usar
+// no usar — legacy
+}
+
+function toggleParada(ri, pi) {
+  document.getElementById(`body-${ri}-${pi}`).classList.toggle('abierto');
+  document.getElementById(`chev-${ri}-${pi}`).classList.toggle('girado');
+}
+
+function prevFoto(rutaId, pi, input) {
+  if (!input.files[0]) return;
+  const r = new FileReader();
+  r.onload = e => {
+    if (e.target.result && e.target.result.length > 100) {
+      // Mostrar preview inmediatamente
+      const imgs = document.querySelectorAll('[id^="prev-"]');
+      imgs.forEach(img => {
+        if (img.id && !img.id.includes('inc')) {
+          const parts = img.id.split('-');
+          if (parts[parts.length-1] == pi) { img.src = e.target.result; img.style.display='block'; }
+        }
+      });
+      // Comprimir a max 800px y calidad 0.6 antes de guardar
+      comprimirImagen(e.target.result, 800, 0.6, function(comprimida) {
+        guardarFotoPendiente(rutaId, pi, 'foto', comprimida);
+        toast('✓ Foto del albarán lista (' + Math.round(comprimida.length/1024) + ' KB)');
+      });
+    }
+  };
+  r.readAsDataURL(input.files[0]);
+}
+
+function prevFotoInc(rutaId, pi, input) {
+  if (!input.files[0]) return;
+  const r = new FileReader();
+  r.onload = e => {
+    if (e.target.result && e.target.result.length > 100) {
+      // Mostrar preview
+      const imgs = document.querySelectorAll('[id^="prev-inc-"]');
+      imgs.forEach(img => {
+        const parts = img.id.split('-');
+        if (parts[parts.length-1] == pi) { img.src = e.target.result; img.style.display='block'; }
+      });
+      // Comprimir antes de guardar
+      comprimirImagen(e.target.result, 800, 0.6, function(comprimida) {
+        guardarFotoPendiente(rutaId, pi, 'inc', comprimida);
+        toast('✓ Foto de incidencia lista');
+      });
+    }
+  };
+  r.readAsDataURL(input.files[0]);
+}
+
+
+
+// ══════════════════════════════════════════
+// ENVÍOS A SHEETS
+// ══════════════════════════════════════════
+function guardarRegistroSheets(conductor, ruta, parada) {
+  enviarSheets({ tipo:'registro', fecha:fechaCorta(), conductor, nombreRuta:ruta.nombreRuta, cliente:parada.cliente, direccion:parada.direccion, llegada:parada.llegada||'', inicioDesc:parada.inicioDesc||'', finDesc:parada.finDesc||'', salida:parada.salida||'', incidencia:parada.incidencia||'' });
+}
+function guardarIncidenciaSheets(inc) {
+  enviarSheets({ tipo:'incidencia', fecha:inc.fecha, hora:inc.hora, conductor:inc.conductor, nombreRuta:inc.nombreRuta, cliente:inc.cliente, direccion:inc.direccion, texto:inc.texto, foto:inc.foto||'' });
+}
+function guardarRutaSheets(ruta) {
+  // Enviar paradas SIN fotos para evitar peticiones demasiado grandes que Google rechaza
+  const paradasSinFotos = ruta.paradas.map(p => ({
+    cliente: p.cliente, direccion: p.direccion,
+    llegada: p.llegada||null, inicioDesc: p.inicioDesc||null,
+    finDesc: p.finDesc||null, salida: p.salida||null,
+    incidencia: p.incidencia||'', enviado: p.enviado||false,
+    foto: (p.foto && !p.foto.startsWith('data:')) ? p.foto : '',
+    fotoIncidencia: (p.fotoIncidencia && !p.fotoIncidencia.startsWith('data:')) ? p.fotoIncidencia : ''
+  }));
+  enviarSheets({ tipo:'ruta', rutaId:ruta.rutaId, fechaAsignada:ruta.fechaAsignada, fechaServicio:ruta.fechaServicio, conductor:ruta.conductor, nombreRuta:ruta.nombreRuta, horaInicio:ruta.horaInicio||'', observaciones:ruta.observaciones||'', pdfNombre:ruta.pdfNombre||'', pdfData:'', paradas:paradasSinFotos });
+}
+
+function enviarFotoSheets(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
+  // Enviar foto por separado en su propia petición pequeña
+  if (!base64 || !base64.startsWith('data:')) return;
+  enviarSheets({
+    tipo: 'foto_parada',
+    rutaId, pi, tipoFoto: tipo,
+    foto: base64,
+    conductor, fechaServicio, cliente
+  });
+}
+function guardarCalendarSheets(ruta) {
+  const descripcion = ruta.paradas.map((p,i)=>{
+    let l = `Parada ${i+1} — ${p.cliente}\n`;
+    l += `Llegada: ${p.llegada||'—'} | Descarga: ${p.inicioDesc||'—'} a ${p.finDesc||'—'} | Salida: ${p.salida||'—'}`;
+    if (p.incidencia) l += `\n⚠️ Incidencia: ${p.incidencia}`;
+    return l;
+  }).join('\n\n');
+  enviarSheets({ tipo:'calendar', fechaCorta:ruta.fechaServicio, conductor:ruta.conductor, nombreRuta:ruta.nombreRuta, horaInicio:ruta.horaInicio||'', descripcion, numParadas:ruta.paradas.length });
+}
+
+// ══════════════════════════════════════════
+// ADMIN — TIEMPO REAL
+// ══════════════════════════════════════════
+function renderAdmin() { renderTiempoReal(); renderTabla(); renderRutasCreadas(); renderIncidencias(); renderConfig(); }
+
+function renderTiempoReal() {
+  let total=0,comp=0,enCurso=0;
+  rutasActivas.forEach(r=>r.paradas.forEach(p=>{total++;if(p.enviado)comp++;else if(p.llegada)enCurso++;}));
+  const conductoresConRuta = [...new Set(rutasActivas.map(r=>r.conductor))];
+  document.getElementById('stats-resumen').innerHTML=`
+    <div class="stat-card"><div class="stat-numero stat-azul">${conductoresConRuta.length}</div><div class="stat-label">Conductores</div></div>
+    <div class="stat-card"><div class="stat-numero">${total}</div><div class="stat-label">Paradas</div></div>
+    <div class="stat-card"><div class="stat-numero stat-verde">${comp}</div><div class="stat-label">Completadas</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--amarillo)">${enCurso}</div><div class="stat-label">En curso</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--blanco-suave)">${total-comp-enCurso}</div><div class="stat-label">Pendientes</div></div>
+    <div class="stat-card"><div class="stat-numero stat-rojo">${incidencias.length}</div><div class="stat-label">Incidencias</div></div>`;
+  const cont = document.getElementById('lista-conductores-admin');
+  if (!conductoresConRuta.length){cont.innerHTML=`<div class="empty-state"><div class="empty-icono">🚛</div>Sin rutas asignadas.</div>`;return;}
+  cont.innerHTML = conductoresConRuta.map((nombre,ci)=>{
+    const rutasC = rutasActivas.filter(r=>r.conductor===nombre);
+    const totalParadasC = rutasC.reduce((a,r)=>a+r.paradas.length,0);
+    const compC = rutasC.reduce((a,r)=>a+r.paradas.filter(p=>p.enviado).length,0);
+    const incC = incidencias.filter(i=>i.conductor===nombre).length;
+    const rutasHtml = rutasC.map(ruta=>{
+      const detalle = ruta.paradas.map(p=>{
+        const e=p.enviado?'ok':p.llegada?'curso':'pendiente';
+        const hs=[p.llegada?`Llegada ${p.llegada}`:'',p.inicioDesc?`Ini. ${p.inicioDesc}`:'',p.finDesc?`Fin ${p.finDesc}`:'',p.salida?`Salida ${p.salida}`:''].filter(Boolean).join(' · ');
+        return `<div class="parada-mini"><div class="dot dot-${e}"></div><div class="parada-mini-info"><div class="parada-mini-destino">${p.cliente}</div><div class="parada-mini-horas">${hs||'Sin registros aún'}</div>${p.incidencia?`<span class="incidencia-tag">⚠️ ${p.incidencia.substring(0,40)}</span>`:''}</div></div>`;
+      }).join('');
+      return `<div class="ruta-mini-bloque"><div class="ruta-mini-bloque-titulo">${ruta.nombreRuta} <span style="color:var(--blanco-suave);font-weight:400">— ${ruta.fechaServicio}</span></div>${detalle}</div>`;
+    }).join('');
+    return `<div class="conductor-row">
+      <div class="conductor-header" onclick="toggleCA(${ci})">
+        <div class="avatar">${nombre.charAt(0)}</div>
+        <div><div class="conductor-nombre">${nombre}</div><div class="conductor-estado">${rutasC.length} ruta(s) — ${compC}/${totalParadasC} paradas</div></div>
+        <div class="conductor-badges">${incC?`<span class="badge-incidencia">⚠️ ${incC}</span>`:''}<span class="chevron" id="ca-chev-${ci}">▼</span></div>
+      </div>
+      <div class="conductor-detalle" id="ca-det-${ci}">${rutasHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCA(i) {
+  document.getElementById(`ca-det-${i}`).classList.toggle('abierto');
+  document.getElementById(`ca-chev-${i}`).classList.toggle('girado');
+}
+
+function renderTabla() {
+  let filas=[];
+  rutasActivas.forEach(ruta=>{
+    ruta.paradas.forEach(p=>{
+      const est=p.enviado?'estado-completado':p.llegada?'estado-en-curso':'estado-pendiente';
+      const estL=p.enviado?'Completada':p.llegada?'En curso':'Pendiente';
+      filas.push(`<tr><td>${ruta.fechaServicio||'—'}</td><td><strong>${ruta.conductor}</strong></td><td>${ruta.nombreRuta||'—'}</td><td>${p.cliente}</td><td style="font-size:11px;color:var(--blanco-suave)">${p.direccion}</td><td class="${p.llegada?'hora-celda':'sin-hora'}">${p.llegada||'—'}</td><td class="${p.inicioDesc?'hora-celda':'sin-hora'}">${p.inicioDesc||'—'}</td><td class="${p.finDesc?'hora-celda':'sin-hora'}">${p.finDesc||'—'}</td><td class="${p.salida?'hora-celda':'sin-hora'}">${p.salida||'—'}</td><td><span class="parada-estado-badge ${est}">${estL}</span></td></tr>`);
+    });
+  });
+  document.getElementById('tbody-registro').innerHTML=filas.length?filas.join(''):`<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--blanco-suave)">Sin rutas activas. Consulta el histórico en Google Sheets → pestaña Registros.</td></tr>`;
+}
+
+function adjuntarPDF(input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  pdfAdminNombre = file.name;
+  const r = new FileReader();
+  r.onload = e => {
+    pdfAdminData = e.target.result;
+    document.getElementById('pdf-adjunto-preview').style.display='flex';
+    document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre;
+  };
+  r.readAsDataURL(file);
+}
+function quitarPDF() {
+  pdfAdminData = null; pdfAdminNombre = '';
+  document.getElementById('pdf-adjunto-preview').style.display='none';
+  document.getElementById('input-pdf-admin').value='';
+}
+
+function nuevaParadaHTML(num) {
+  return `<div class="parada-bloque" id="pb-${num}">
+    <div class="parada-bloque-titulo">📍 Parada ${num}</div>
+    <button class="btn-quitar-bloque" onclick="quitarParada(this)">✕</button>
+    <div class="parada-bloque-tabs">
+      <button class="parada-tab activo" onclick="cambiarModoParada(${num},'guardado',this)">📋 Cliente guardado</button>
+      <button class="parada-tab" onclick="cambiarModoParada(${num},'manual',this)">✏️ Escribir a mano</button>
+    </div>
+    <div class="modo-guardado" id="modo-guardado-${num}">
+      <div class="cliente-select-wrap">
+        <input type="text" placeholder="Buscar cliente guardado..." id="buscar-cliente-${num}" oninput="filtrarClientes(${num})" onfocus="mostrarClientes(${num})" autocomplete="off">
+        <div class="cliente-resultado" id="resultado-${num}"></div>
+      </div>
+      <input type="hidden" id="cliente-nombre-${num}">
+      <input type="hidden" id="cliente-dir-${num}">
+      <div id="cliente-seleccionado-${num}" style="display:none;margin-top:8px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:10px 12px;">
+        <div style="font-size:13px;font-weight:700" id="cs-nombre-${num}"></div>
+        <div style="font-size:11px;color:var(--blanco-suave);margin-top:2px" id="cs-dir-${num}"></div>
+        <button onclick="limpiarCliente(${num})" style="background:none;border:none;color:var(--rojo);font-size:11px;cursor:pointer;margin-top:4px;font-family:Inter,sans-serif">✕ Cambiar cliente</button>
+      </div>
+    </div>
+    <div class="modo-manual" id="modo-manual-${num}">
+      <input type="text" placeholder="Nombre del cliente" id="manual-nombre-${num}">
+      <input type="text" placeholder="Dirección completa" id="manual-dir-${num}">
+      <button class="btn-guardar-cliente" onclick="guardarNuevoClienteDesdeParada(${num})">+ Guardar este cliente para futuras rutas</button>
+    </div>
+  </div>`;
+}
+
+function cambiarModoParada(num, modo, btn) {
+  btn.closest('.parada-bloque').querySelectorAll('.parada-tab').forEach(t=>t.classList.remove('activo'));
+  btn.classList.add('activo');
+  document.getElementById(`modo-guardado-${num}`).style.display = modo==='guardado'?'block':'none';
+  document.getElementById(`modo-manual-${num}`).style.display = modo==='manual'?'block':'none';
+}
+function filtrarClientes(num) { mostrarClientes(num, document.getElementById(`buscar-cliente-${num}`).value.toLowerCase()); }
+function mostrarClientes(num, q='') {
+  const res = document.getElementById(`resultado-${num}`);
+  const filtrados = q ? clientesGuardados.filter(c=>c.nombre.toLowerCase().includes(q)||(c.direccion||'').toLowerCase().includes(q)) : clientesGuardados;
+  if (!filtrados.length) { res.style.display='none'; return; }
+  res.innerHTML = filtrados.map(c=>`<div class="cliente-opcion" onclick="seleccionarCliente(${num},'${(c.nombre||'').replace(/'/g,"\\'")}','${(c.direccion||'').replace(/'/g,"\\'")}')"><div class="cliente-opcion-nombre">${c.nombre}</div><div class="cliente-opcion-dir">${c.direccion||''}</div></div>`).join('');
+  res.style.display='block';
+}
+function seleccionarCliente(num, nombre, dir) {
+  document.getElementById(`buscar-cliente-${num}`).value='';
+  document.getElementById(`resultado-${num}`).style.display='none';
+  document.getElementById(`cliente-nombre-${num}`).value=nombre;
+  document.getElementById(`cliente-dir-${num}`).value=dir;
+  document.getElementById(`cs-nombre-${num}`).textContent=nombre;
+  document.getElementById(`cs-dir-${num}`).textContent=dir;
+  document.getElementById(`cliente-seleccionado-${num}`).style.display='block';
+}
+function limpiarCliente(num) {
+  document.getElementById(`cliente-nombre-${num}`).value='';
+  document.getElementById(`cliente-dir-${num}`).value='';
+  document.getElementById(`cliente-seleccionado-${num}`).style.display='none';
+}
+function guardarNuevoClienteDesdeParada(num) {
+  const nombre = document.getElementById(`manual-nombre-${num}`).value.trim();
+  const dir = document.getElementById(`manual-dir-${num}`).value.trim();
+  if (!nombre) { toast('Escribe el nombre del cliente','err'); return; }
+  if (clientesGuardados.find(c=>c.nombre===nombre)) { toast('Este cliente ya existe','err'); return; }
+  clientesGuardados.push({nombre, direccion:dir});
+  enviarSheets({tipo:'cliente_add', nombre, direccion:dir});
+  toast(`✓ Cliente "${nombre}" guardado`);
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.cliente-select-wrap')) document.querySelectorAll('.cliente-resultado').forEach(r=>r.style.display='none');
+});
+
+let paradaCount = 0;
+function agregarParada() { paradaCount++; document.getElementById('inputs-paradas').insertAdjacentHTML('beforeend', nuevaParadaHTML(paradaCount)); }
+function quitarParada(btn) { if (document.querySelectorAll('.parada-bloque').length<=1) return; btn.parentElement.remove(); }
+function initParadas() { paradaCount = 0; document.getElementById('inputs-paradas').innerHTML=''; agregarParada(); }
+
+function crearParadaObj(cliente, direccion) {
+  return { cliente, direccion, llegada:null, inicioDesc:null, finDesc:null, salida:null, incidencia:"", foto:null, fotoIncidencia:null, enviado:false };
+}
+
+function crearRuta() {
+  const conductor = document.getElementById('admin-select-conductor').value;
+  if (!conductor){toast('Selecciona un conductor','err');return;}
+  const fechaServicioInput = document.getElementById('admin-fecha-servicio').value;
+  if (!fechaServicioInput){toast('Selecciona la fecha del servicio','err');return;}
+  const nombreRuta = document.getElementById('admin-nombre-ruta').value.trim();
+  if (!nombreRuta){toast('Pon un nombre o número a la ruta','err');return;}
+  const horaInicio = document.getElementById('admin-hora-inicio').value;
+  const observaciones = document.getElementById('admin-observaciones').value.trim();
+  const bloques = document.querySelectorAll('#inputs-paradas .parada-bloque');
+  const paradas=[];
+  bloques.forEach(b=>{
+    const num = b.id.replace('pb-','');
+    const modoBtn = b.querySelector('.parada-tab.activo');
+    const esManual = modoBtn && modoBtn.textContent.includes('mano');
+    let cliente='', dir='';
+    if (esManual) {
+      cliente = (document.getElementById('manual-nombre-'+num)||{value:''}).value.trim();
+      dir = (document.getElementById('manual-dir-'+num)||{value:''}).value.trim();
+    } else {
+      cliente = (document.getElementById('cliente-nombre-'+num)||{value:''}).value.trim();
+      dir = (document.getElementById('cliente-dir-'+num)||{value:''}).value.trim();
+    }
+    if(cliente) paradas.push(crearParadaObj(cliente,dir));
+  });
+  if(!paradas.length){toast('Añade al menos una parada con cliente','err');return;}
+  const ruta = {
+    rutaId: generarRutaId(),
+    fechaAsignada: fechaCorta(),
+    fechaServicio: fechaInputAFechaCorta(fechaServicioInput),
+    conductor, nombreRuta, horaInicio, observaciones,
+    pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
+  };
+  rutasActivas.push(ruta);
+  guardarRutaSheets(ruta);
+  guardarCalendarSheets(ruta);
+  toast(`✓ Ruta "${nombreRuta}" asignada a ${conductor} para el ${ruta.fechaServicio}`);
+  document.getElementById('admin-select-conductor').value='';
+  document.getElementById('admin-nombre-ruta').value='';
+  document.getElementById('admin-hora-inicio').value='';
+  document.getElementById('admin-observaciones').value='';
+  document.getElementById('admin-fecha-servicio').value = fechaInputManana();
+  quitarPDF();
+  initParadas();
+  renderRutasCreadas(); renderTiempoReal();
+}
+
+function renderRutasCreadas() {
+  const cont=document.getElementById('rutas-creadas-lista');
+  if(!rutasActivas.length){cont.innerHTML=`<div class="empty-state"><div class="empty-icono">🗺️</div>Sin rutas asignadas.</div>`;return;}
+  const ordenadas = [...rutasActivas].sort((a,b)=>(a.fechaServicio||'').localeCompare(b.fechaServicio||''));
+  cont.innerHTML=ordenadas.map(ruta=>`
+    <div class="ruta-item">
+      <div class="ruta-item-header" style="flex-wrap:wrap;gap:6px">
+        <div class="avatar" style="width:26px;height:26px;font-size:11px">${ruta.conductor.charAt(0)}</div>
+        <strong>${ruta.conductor}</strong>
+        <span class="ruta-nombre-tag">${ruta.nombreRuta}</span>
+        <span class="ruta-fecha-tag">📅 ${ruta.fechaServicio}</span>
+        ${ruta.horaInicio?`<span class="ruta-hora-tag">🕐 ${ruta.horaInicio}</span>`:''}
+        ${ruta.pdfNombre?`<span class="ruta-conductor-tag">📄 PDF</span>`:''}
+        <button class="btn-reasignar" onclick="abrirModalReasignar('${ruta.rutaId}')">🔄 Reasignar</button>
+        <button class="btn-eliminar-ruta" onclick="abrirModalEliminarRuta('${ruta.rutaId}')">✕ Eliminar</button>
+      </div>
+      <div class="ruta-paradas-list">${ruta.paradas.map((p,i)=>`${i+1}. <strong>${p.cliente}</strong>${p.direccion?' — '+p.direccion:''}`).join('<br>')}</div>
+      ${ruta.observaciones?`<div class="ruta-obs">⚠️ ${ruta.observaciones}</div>`:''}
+    </div>`).join('');
+}
+
+function abrirModalEliminarRuta(rutaId) {
+  rutaAEliminar = rutaId;
+  const ruta = rutasActivas.find(r=>r.rutaId===rutaId);
+  document.getElementById('modal-eliminar-texto').textContent = `¿Eliminar "${ruta.nombreRuta}" de ${ruta.conductor} (${ruta.fechaServicio})?`;
+  document.getElementById('modal-eliminar-ruta').classList.add('activo');
+}
+function cerrarModalEliminarRuta() { document.getElementById('modal-eliminar-ruta').classList.remove('activo'); rutaAEliminar=null; }
+function confirmarEliminarRuta() {
+  rutasActivas = rutasActivas.filter(r=>r.rutaId!==rutaAEliminar);
+  enviarSheets({tipo:'reset_jornada', fechaServicio: null, rutaIdUnico: rutaAEliminar});
+  cerrarModalEliminarRuta();
+  renderRutasCreadas(); renderTiempoReal();
+  toast('✓ Ruta eliminada');
+}
+
+function abrirModalReasignar(rutaId) {
+  conductorAReasignar = rutaId;
+  const ruta = rutasActivas.find(r=>r.rutaId===rutaId);
+  document.getElementById('modal-reasignar-texto').textContent = `Ruta "${ruta.nombreRuta}" de ${ruta.conductor}. ¿A qué conductor transferirla?`;
+  document.getElementById('modal-conductor-nuevo').value = '';
+  document.getElementById('modal-reasignar').classList.add('activo');
+}
+function cerrarModal() { document.getElementById('modal-reasignar').classList.remove('activo'); conductorAReasignar=null; }
+function confirmarReasignacion() {
+  const nuevo = document.getElementById('modal-conductor-nuevo').value;
+  if (!nuevo) { toast('Selecciona un conductor','err'); return; }
+  const ruta = rutasActivas.find(r=>r.rutaId===conductorAReasignar);
+  if (!ruta) return;
+  const anterior = ruta.conductor;
+  ruta.conductor = nuevo;
+  enviarSheets({tipo:'reasignar', rutaId:ruta.rutaId, nuevoConductor:nuevo});
+  guardarCalendarSheets(ruta);
+  toast(`✓ Ruta transferida de ${anterior} a ${nuevo}`);
+  cerrarModal();
+  renderRutasCreadas(); renderTiempoReal();
+}
+
+function abrirModalReset() { document.getElementById('modal-reset').classList.add('activo'); }
+function cerrarModalReset() { document.getElementById('modal-reset').classList.remove('activo'); }
+function confirmarReset() {
+  const fechaInput = document.getElementById('reset-fecha').value;
+  const fechaC = fechaInputAFechaCorta(fechaInput);
+  rutasActivas = rutasActivas.filter(r=>r.fechaServicio !== fechaC);
+  enviarSheets({tipo:'reset_jornada', fechaServicio: fechaC});
+  cerrarModalReset();
+  renderRutasCreadas(); renderTiempoReal();
+  toast(`✓ Rutas del ${fechaC} eliminadas`);
+}
+
+function añadirConductorUI() {
+  const nombre = document.getElementById('nuevo-conductor-nombre').value.trim();
+  const pin = document.getElementById('nuevo-conductor-pin').value.trim();
+  if (!nombre) { toast('Escribe el nombre del conductor','err'); return; }
+  if (!/^[0-9]{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos','err'); return; }
+  if (PINES[nombre]) { toast('Ya existe un conductor con ese nombre','err'); return; }
+  if (Object.values(PINES).includes(pin)) { toast('Ese PIN ya está en uso','err'); return; }
+  PINES[nombre] = pin;
+  enviarSheets({tipo:'conductor_add', nombre, pin});
+  document.getElementById('nuevo-conductor-nombre').value='';
+  document.getElementById('nuevo-conductor-pin').value='';
+  actualizarSelectsConductores();
+  renderConfigConductores();
+  toast(`✓ Conductor "${nombre}" añadido con PIN ${pin}`);
+}
+function eliminarConductorUI(nombre) {
+  if (rutasActivas.some(r=>r.conductor===nombre)) {
+    if (!confirm(`${nombre} tiene rutas asignadas. ¿Eliminar igualmente?`)) return;
+  }
+  delete PINES[nombre];
+  enviarSheets({tipo:'conductor_del', nombre});
+  actualizarSelectsConductores();
+  renderConfigConductores();
+  toast(`Conductor "${nombre}" eliminado`);
+}
+function renderConfigConductores() {
+  const cont = document.getElementById('lista-conductores-config');
+  if (!cont) return;
+  cont.innerHTML = listaConductores().map(nombre => `
+    <div class="conductor-config-row">
+      <div class="avatar" style="width:32px;height:32px;font-size:13px">${nombre.charAt(0)}</div>
+      <div class="conductor-config-info"><div class="conductor-config-nombre">${nombre}</div><div class="conductor-config-pin">PIN: ${PINES[nombre]}</div></div>
+      <button class="btn-eliminar-conductor" onclick="eliminarConductorUI('${nombre.replace(/'/g,"\\'")}')">✕ Eliminar</button>
+    </div>`).join('');
+}
+function añadirClienteUI() {
+  const nombre = document.getElementById('nuevo-cliente-nombre').value.trim();
+  const dir = document.getElementById('nuevo-cliente-dir').value.trim();
+  if (!nombre) { toast('Escribe el nombre del cliente','err'); return; }
+  if (clientesGuardados.find(c=>c.nombre===nombre)) { toast('Ese cliente ya existe','err'); return; }
+  clientesGuardados.push({nombre, direccion:dir});
+  enviarSheets({tipo:'cliente_add', nombre, direccion:dir});
+  document.getElementById('nuevo-cliente-nombre').value='';
+  document.getElementById('nuevo-cliente-dir').value='';
+  renderConfigClientes();
+  toast(`✓ Cliente "${nombre}" añadido`);
+}
+function eliminarClienteUI(nombre) {
+  clientesGuardados = clientesGuardados.filter(c=>c.nombre!==nombre);
+  enviarSheets({tipo:'cliente_del', nombre});
+  renderConfigClientes();
+  toast(`Cliente "${nombre}" eliminado`);
+}
+function renderConfigClientes() {
+  const cont = document.getElementById('lista-clientes-config');
+  if (!cont) return;
+  if (!clientesGuardados.length) { cont.innerHTML = `<div class="empty-state"><div class="empty-icono">📋</div>Sin clientes guardados.</div>`; return; }
+  cont.innerHTML = clientesGuardados.map(c => `
+    <div class="cliente-config-row">
+      <div class="cliente-config-info"><div class="cliente-config-nombre">${c.nombre}</div><div class="cliente-config-dir">${c.direccion||'Sin dirección'}</div></div>
+      <button class="btn-eliminar-conductor" onclick="eliminarClienteUI('${c.nombre.replace(/'/g,"\\'")}')">✕</button>
+    </div>`).join('');
+}
+function renderConfig() { renderConfigConductores(); renderConfigClientes(); }
+
+function renderIncidencias() {
+  const cont=document.getElementById('lista-incidencias');
+  if(!incidencias.length){cont.innerHTML=`<div class="empty-state"><div class="empty-icono">✅</div>Sin incidencias.</div>`;return;}
+  cont.innerHTML=[...incidencias].reverse().map(inc=>`
+    <div class="incidencia-card">
+      <div class="incidencia-header">
+        <div class="avatar" style="width:30px;height:30px;font-size:12px">${inc.conductor.charAt(0)}</div>
+        <div><div class="incidencia-conductor">${inc.conductor}</div><div style="font-size:11px;color:var(--blanco-suave)">${inc.nombreRuta||''} — ${inc.cliente}</div></div>
+        <div class="incidencia-hora-txt">${inc.fecha} ${inc.hora}</div>
+      </div>
+      <div class="incidencia-texto">${inc.texto}</div>
+      ${inc.foto?`<img src="${inc.foto}" class="incidencia-foto">`:''}
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════
+// UTILIDADES
+// ══════════════════════════════════════════
+function estadoParada(p){return p.enviado?'completado':p.llegada?'en-curso':'pendiente';}
+function labelEst(e){return{completado:'Completada','en-curso':'En curso',pendiente:'Pendiente'}[e];}
+function colorEst(e){return{completado:'var(--verde)','en-curso':'var(--amarillo)',pendiente:'var(--gris-borde)'}[e];}
+function labelCampo(c){return{llegada:'Llegada',inicioDesc:'Inicio descarga',finDesc:'Fin descarga',salida:'Salida'}[c];}
+function toast(msg,tipo){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.background=tipo==='err'?'var(--rojo)':'var(--verde)';
+  t.style.display='block'; setTimeout(()=>t.style.display='none',2800);
+}
+
+// ══════════════════════════════════════════
+// INICIO
+// ══════════════════════════════════════════
+document.getElementById('fecha-login').textContent = fechaActual();
+cargarTodo(true);
+</script>
+</body>
+</html>
