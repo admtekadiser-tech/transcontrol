@@ -946,12 +946,17 @@ function enviarParada(rutaId, pi, ri) {
   guardarRegistroSheets(usuarioActual, ruta, p);
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
-  // Enviar fotos por separado para evitar el límite de tamaño de Google
-  if (p.foto && p.foto.startsWith('data:')) {
-    enviarFotoSheets(rutaId, pi, 'albaran', p.foto, usuarioActual, ruta.fechaServicio, p.cliente);
+  // Enviar fotos por separado
+  const fotoAlbaran = obtenerFotoPendiente(rutaId, pi, 'foto');
+  const fotoInc = obtenerFotoPendiente(rutaId, pi, 'inc');
+  console.log('[ENVIO] fotoAlbaran longitud:', fotoAlbaran.length, '| fotoInc longitud:', fotoInc.length);
+  if (fotoAlbaran && fotoAlbaran.startsWith('data:')) {
+    console.log('[ENVIO] Enviando foto albarán a Sheets...');
+    enviarFotoSheets(rutaId, pi, 'albaran', fotoAlbaran, usuarioActual, ruta.fechaServicio, p.cliente);
   }
-  if (p.fotoIncidencia && p.fotoIncidencia.startsWith('data:')) {
-    enviarFotoSheets(rutaId, pi, 'incidencia', p.fotoIncidencia, usuarioActual, ruta.fechaServicio, p.cliente);
+  if (fotoInc && fotoInc.startsWith('data:')) {
+    console.log('[ENVIO] Enviando foto incidencia a Sheets...');
+    enviarFotoSheets(rutaId, pi, 'incidencia', fotoInc, usuarioActual, ruta.fechaServicio, p.cliente);
   }
   limpiarFotosPendientes(rutaId, pi);
   toast('✓ Parada registrada');
