@@ -511,7 +511,7 @@
 // ══════════════════════════════════════════
 // CONFIG — CAMBIA ESTA URL POR LA TUYA TRAS ACTUALIZAR EL APPS SCRIPT
 // ══════════════════════════════════════════
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwP5itekj1MJNcinFAl5lAIi46f6filgGsipSvPfKQgTEhX-W1gj67IHwPTYhjkd-gR/exec';
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzZEnuPObkQiNY98l2fe4Wxlm3XN-fjYMPbAQPpEQoYGdjohcnFqUptyTXbC86O9PEI/exec';
 
 // ══════════════════════════════════════════
 // ESTADO GLOBAL — TODO SE CARGA DESDE SHEETS
@@ -1047,14 +1047,20 @@ function guardarRutaSheets(ruta) {
 }
 
 function enviarFotoSheets(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
-  // Enviar foto por separado en su propia petición pequeña
   if (!base64 || !base64.startsWith('data:')) return;
-  enviarSheets({
-    tipo: 'foto_parada',
-    rutaId, pi, tipoFoto: tipo,
-    foto: base64,
-    conductor, fechaServicio, cliente
-  });
+  // Dividir en chunks de 40KB para no superar el límite de Google Apps Script
+  const CHUNK_SIZE = 40000;
+  const totalChunks = Math.ceil(base64.length / CHUNK_SIZE);
+  console.log('[FOTO_CHUNK] Enviando foto en', totalChunks, 'partes. Tamaño total:', Math.round(base64.length/1024) + 'KB');
+  for (let i = 0; i < totalChunks; i++) {
+    const chunk = base64.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+    enviarSheets({
+      tipo: 'foto_parada_chunk',
+      rutaId, pi, tipoFoto: tipo,
+      chunk, chunkIndex: i, totalChunks,
+      conductor, fechaServicio, cliente
+    });
+  }
 }
 function guardarCalendarSheets(ruta) {
   const descripcion = ruta.paradas.map((p,i)=>{
