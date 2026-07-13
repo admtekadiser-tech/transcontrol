@@ -603,11 +603,16 @@ async function recargarDatos() {
 }
 
 function enviarSheets(datos) {
+  const body = JSON.stringify(datos);
+  console.log('[SHEETS] Enviando tipo=' + datos.tipo + ' tamaño=' + Math.round(body.length/1024) + 'KB');
   return fetch(SHEETS_URL, {
-    method:'POST', mode:'no-cors',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(datos)
-  }).catch(err => console.log('Error Sheets:', err));
+    method:'POST',
+    mode:'no-cors',
+    headers:{'Content-Type':'text/plain'},
+    body: body
+  }).then(r => {
+    console.log('[SHEETS] Respuesta tipo=' + datos.tipo + ' status=' + r.status);
+  }).catch(err => console.log('[SHEETS] Error tipo=' + datos.tipo + ':', err.message));
 }
 
 // ══════════════════════════════════════════
