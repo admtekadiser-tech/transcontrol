@@ -514,6 +514,38 @@
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzZEnuPObkQiNY98l2fe4Wxlm3XN-fjYMPbAQPpEQoYGdjohcnFqUptyTXbC86O9PEI/exec';
 
 // ══════════════════════════════════════════
+// CLOUDINARY — Subida directa de fotos
+// ══════════════════════════════════════════
+const CLOUDINARY_CLOUD = 'oqwqqgqu';
+const CLOUDINARY_PRESET = 'wp7678or';
+
+async function subirFotoCloudinary(base64, carpeta, nombreArchivo) {
+  if (!base64 || !base64.startsWith('data:')) return '';
+  try {
+    const formData = new FormData();
+    formData.append('file', base64);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+    formData.append('folder', 'TransControl/' + carpeta);
+    formData.append('public_id', nombreArchivo);
+    const resp = await fetch(
+      'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/image/upload',
+      { method: 'POST', body: formData }
+    );
+    const data = await resp.json();
+    if (data.secure_url) {
+      console.log('[CLOUDINARY] Subida OK:', data.secure_url);
+      return data.secure_url;
+    } else {
+      console.error('[CLOUDINARY] Error:', JSON.stringify(data));
+      return '';
+    }
+  } catch(err) {
+    console.error('[CLOUDINARY] Error:', err.message);
+    return '';
+  }
+}
+
+// ══════════════════════════════════════════
 // ESTADO GLOBAL — TODO SE CARGA DESDE SHEETS
 // ══════════════════════════════════════════
 let usuarioActual = null;
@@ -951,17 +983,14 @@ function enviarParada(rutaId, pi, ri) {
   guardarRegistroSheets(usuarioActual, ruta, p);
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
-  // Enviar fotos por separado
+  // Subir fotos a Cloudinary directamente desde el navegador
   const fotoAlbaran = obtenerFotoPendiente(rutaId, pi, 'foto');
   const fotoInc = obtenerFotoPendiente(rutaId, pi, 'inc');
-  console.log('[ENVIO] fotoAlbaran longitud:', fotoAlbaran.length, '| fotoInc longitud:', fotoInc.length);
   if (fotoAlbaran && fotoAlbaran.startsWith('data:')) {
-    console.log('[ENVIO] Enviando foto albarán a Sheets...');
-    enviarFotoSheets(rutaId, pi, 'albaran', fotoAlbaran, usuarioActual, ruta.fechaServicio, p.cliente);
+    enviarFotoCloudinaryYGuardar(rutaId, pi, 'albaran', fotoAlbaran, usuarioActual, ruta.fechaServicio, p.cliente);
   }
   if (fotoInc && fotoInc.startsWith('data:')) {
-    console.log('[ENVIO] Enviando foto incidencia a Sheets...');
-    enviarFotoSheets(rutaId, pi, 'incidencia', fotoInc, usuarioActual, ruta.fechaServicio, p.cliente);
+    enviarFotoCloudinaryYGuardar(rutaId, pi, 'incidencia', fotoInc, usuarioActual, ruta.fechaServicio, p.cliente);
   }
   limpiarFotosPendientes(rutaId, pi);
   toast('✓ Parada registrada');
@@ -1046,21 +1075,33 @@ function guardarRutaSheets(ruta) {
   enviarSheets({ tipo:'ruta', rutaId:ruta.rutaId, fechaAsignada:ruta.fechaAsignada, fechaServicio:ruta.fechaServicio, conductor:ruta.conductor, nombreRuta:ruta.nombreRuta, horaInicio:ruta.horaInicio||'', observaciones:ruta.observaciones||'', pdfNombre:ruta.pdfNombre||'', pdfData:'', paradas:paradasSinFotos });
 }
 
-function enviarFotoSheets(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
+async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
   if (!base64 || !base64.startsWith('data:')) return;
-  // Dividir en chunks de 40KB para no superar el límite de Google Apps Script
-  const CHUNK_SIZE = 40000;
-  const totalChunks = Math.ceil(base64.length / CHUNK_SIZE);
-  console.log('[FOTO_CHUNK] Enviando foto en', totalChunks, 'partes. Tamaño total:', Math.round(base64.length/1024) + 'KB');
-  for (let i = 0; i < totalChunks; i++) {
-    const chunk = base64.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+  const fechaCarpeta = (fechaServicio || 'sin-fecha').replace(/\//g, '-');
+  const carpeta = tipo === 'albaran'
+    ? 'Albaranes_TransControl/' + conductor + '/' + fechaCarpeta
+    : 'Incidencias_TransControl/' + conductor + '/' + fechaCarpeta;
+  const nombreArchivo = tipo + '_' + (cliente||'').replace(/[^a-zA-Z0-9]/g,'_') + '_' + Date.now();
+
+  toast('⏳ Subiendo foto a la nube...');
+  const url = await subirFotoCloudinary(base64, carpeta, nombreArchivo);
+
+  if (url) {
+    toast('✓ Foto guardada en la nube');
+    // Guardar URL en Sheets
     enviarSheets({
-      tipo: 'foto_parada_chunk',
+      tipo: 'foto_parada',
       rutaId, pi, tipoFoto: tipo,
-      chunk, chunkIndex: i, totalChunks,
+      foto: url,
       conductor, fechaServicio, cliente
     });
+  } else {
+    toast('⚠️ No se pudo subir la foto', 'err');
   }
+}
+
+function enviarFotoSheets(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
+  // Ya no se usa — sustituida por enviarFotoCloudinaryYGuardar
 }
 function guardarCalendarSheets(ruta) {
   const descripcion = ruta.paradas.map((p,i)=>{
