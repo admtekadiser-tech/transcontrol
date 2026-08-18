@@ -880,6 +880,35 @@ function renderConductor(nombre) {
             <label>⚠️ Incidencia (opcional)</label>
             <textarea id="inc-${ri}-${i}" placeholder="Describe si hay algún problema...">${p.incidencia||''}</textarea>
           </div>
+
+          <div class="separador"></div>
+
+          <div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">📦 Control de palets</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+              <div>
+                <label style="font-size:10px;font-weight:600;color:var(--blanco-suave);display:block;margin-bottom:4px;">PALETS ENTREGADOS</label>
+                <input type="number" min="0" id="palets-entregados-${ri}-${i}"
+                  value="${p.paletsEntregados||0}"
+                  style="text-align:center;font-size:18px;font-weight:800;padding:8px;"
+                  oninput="actualizarPalets(${ri},${i})">
+              </div>
+              <div>
+                <label style="font-size:10px;font-weight:600;color:var(--blanco-suave);display:block;margin-bottom:4px;">PALETS RECOGIDOS</label>
+                <input type="number" min="0" id="palets-recogidos-${ri}-${i}"
+                  value="${p.paletsRecogidos||0}"
+                  style="text-align:center;font-size:18px;font-weight:800;padding:8px;"
+                  oninput="actualizarPalets(${ri},${i})">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:10px;font-weight:600;color:var(--blanco-suave);display:block;margin-bottom:4px;">📄 E-VOUCHER (si el cliente no devuelve palets físicos)</label>
+              <input type="text" id="evoucher-${ri}-${i}"
+                value="${p.evoucher||''}"
+                placeholder="Ej: Lidl — voucher nº 12345"
+                style="font-size:13px;">
+            </div>
+          </div>
           <div class="fila-accion">
             <label>📸 Foto de la incidencia (opcional)</label>
             <div class="input-foto" onclick="document.getElementById('foto-inc-${ri}-${i}').click()">
@@ -959,6 +988,9 @@ function enviarParada(rutaId, pi, ri) {
   const p = ruta.paradas[pi];
 
   p.incidencia = document.getElementById('inc-' + ri + '-' + pi).value;
+  p.paletsEntregados = parseInt(document.getElementById('palets-entregados-' + ri + '-' + pi).value)||0;
+  p.paletsRecogidos = parseInt(document.getElementById('palets-recogidos-' + ri + '-' + pi).value)||0;
+  p.evoucher = document.getElementById('evoucher-' + ri + '-' + pi).value||'';
   p.enviado = true;
 
   // Recuperar fotos del almacén global usando rutaId como clave estable
@@ -1000,6 +1032,16 @@ function enviarParada(rutaId, pi, ri) {
 function _legacy_unused(ri, pi) {
   // no usar
 // no usar — legacy
+}
+
+function actualizarPalets(ri, pi) {
+  const rutas = rutasDelConductorVisibles(usuarioActual);
+  if (!rutas[ri]) return;
+  const ruta = rutasActivas.find(r => r.rutaId === rutas[ri].rutaId);
+  if (!ruta || !ruta.paradas[pi]) return;
+  ruta.paradas[pi].paletsEntregados = parseInt(document.getElementById('palets-entregados-'+ri+'-'+pi).value)||0;
+  ruta.paradas[pi].paletsRecogidos = parseInt(document.getElementById('palets-recogidos-'+ri+'-'+pi).value)||0;
+  ruta.paradas[pi].evoucher = document.getElementById('evoucher-'+ri+'-'+pi).value||'';
 }
 
 function toggleParada(ri, pi) {
@@ -1057,7 +1099,15 @@ function prevFotoInc(rutaId, pi, input) {
 // ENVÍOS A SHEETS
 // ══════════════════════════════════════════
 function guardarRegistroSheets(conductor, ruta, parada) {
-  enviarSheets({ tipo:'registro', fecha:fechaCorta(), conductor, nombreRuta:ruta.nombreRuta, cliente:parada.cliente, direccion:parada.direccion, llegada:parada.llegada||'', inicioDesc:parada.inicioDesc||'', finDesc:parada.finDesc||'', salida:parada.salida||'', incidencia:parada.incidencia||'' });
+  enviarSheets({ tipo:'registro', fecha:fechaCorta(), conductor, nombreRuta:ruta.nombreRuta,
+    cliente:parada.cliente, direccion:parada.direccion,
+    llegada:parada.llegada||'', inicioDesc:parada.inicioDesc||'',
+    finDesc:parada.finDesc||'', salida:parada.salida||'',
+    incidencia:parada.incidencia||'',
+    paletsEntregados:parada.paletsEntregados||0,
+    paletsRecogidos:parada.paletsRecogidos||0,
+    evoucher:parada.evoucher||''
+  });
 }
 function guardarIncidenciaSheets(inc) {
   enviarSheets({ tipo:'incidencia', fecha:inc.fecha, hora:inc.hora, conductor:inc.conductor, nombreRuta:inc.nombreRuta, cliente:inc.cliente, direccion:inc.direccion, texto:inc.texto, foto:inc.foto||'' });
@@ -1078,9 +1128,8 @@ function guardarRutaSheets(ruta) {
 async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
   if (!base64 || !base64.startsWith('data:')) return;
   const fechaCarpeta = (fechaServicio || 'sin-fecha').replace(/\//g, '-');
-  const carpeta = tipo === 'albaran'
-    ? 'Albaranes_TransControl/' + conductor + '/' + fechaCarpeta
-    : 'Incidencias_TransControl/' + conductor + '/' + fechaCarpeta;
+  const carpetaBase = tipo === 'albaran' ? 'Albaranes_TransControl' : 'Incidencias_TransControl';
+  const carpeta = carpetaBase + '/' + conductor + '/' + fechaCarpeta;
   const nombreArchivo = tipo + '_' + (cliente||'').replace(/[^a-zA-Z0-9]/g,'_') + '_' + Date.now();
 
   toast('⏳ Subiendo foto a la nube...');
