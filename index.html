@@ -862,6 +862,23 @@ function renderConductor(nombre) {
           <span class="chevron" id="chev-${ri}-${i}">▼</span>
         </div>
         <div class="parada-body" id="body-${ri}-${i}">
+          ${(()=>{
+            const clienteData = clientesGuardados.find(c=>c.nombre===p.cliente);
+            return clienteData && clienteData.devuelvePalets ? `
+              <div style="background:rgba(245,158,11,.15);border:2px solid var(--amarillo);
+                border-radius:10px;padding:12px 14px;margin-bottom:12px;
+                display:flex;align-items:center;gap:10px;">
+                <span style="font-size:22px">⚠️</span>
+                <div>
+                  <div style="font-size:12px;font-weight:800;color:var(--amarillo);letter-spacing:0.5px;">
+                    ¡OJO! ESTE CLIENTE DEBE DEVOLVERTE PALETS
+                  </div>
+                  <div style="font-size:11px;color:var(--blanco-suave);margin-top:3px;">
+                    Asegúrate de recoger los palets europeos antes de salir
+                  </div>
+                </div>
+              </div>` : '';
+          })()}
           <div class="dir-completa">
             <div>
               <div class="dir-completa-texto"><strong>${p.cliente}</strong><br>${p.direccion||'Sin dirección'}</div>
@@ -1282,7 +1299,7 @@ function mostrarClientes(num, q='') {
   res.innerHTML = filtrados.map(c=>`<div class="cliente-opcion" onclick="seleccionarCliente(${num},'${(c.nombre||'').replace(/'/g,"\\'")}','${(c.direccion||'').replace(/'/g,"\\'")}')"><div class="cliente-opcion-nombre">${c.nombre}</div><div class="cliente-opcion-dir">${c.direccion||''}</div></div>`).join('');
   res.style.display='block';
 }
-function seleccionarCliente(num, nombre, dir) {
+function seleccionarCliente(num, nombre, dir, devuelvePalets) {
   document.getElementById(`buscar-cliente-${num}`).value='';
   document.getElementById(`resultado-${num}`).style.display='none';
   document.getElementById(`cliente-nombre-${num}`).value=nombre;
@@ -1475,12 +1492,21 @@ function añadirClienteUI() {
   const dir = document.getElementById('nuevo-cliente-dir').value.trim();
   if (!nombre) { toast('Escribe el nombre del cliente','err'); return; }
   if (clientesGuardados.find(c=>c.nombre===nombre)) { toast('Ese cliente ya existe','err'); return; }
-  clientesGuardados.push({nombre, direccion:dir});
-  enviarSheets({tipo:'cliente_add', nombre, direccion:dir});
+  clientesGuardados.push({nombre, direccion:dir, devuelvePalets:false});
+  enviarSheets({tipo:'cliente_add', nombre, direccion:dir, devuelvePalets:false});
   document.getElementById('nuevo-cliente-nombre').value='';
   document.getElementById('nuevo-cliente-dir').value='';
   renderConfigClientes();
   toast(`✓ Cliente "${nombre}" añadido`);
+}
+
+function toggleDevuelvePalets(nombre) {
+  const c = clientesGuardados.find(c=>c.nombre===nombre);
+  if (!c) return;
+  c.devuelvePalets = !c.devuelvePalets;
+  enviarSheets({tipo:'cliente_update_palets', nombre, devuelvePalets: c.devuelvePalets});
+  renderConfigClientes();
+  toast(c.devuelvePalets ? `⭐ ${nombre} marcado: devuelve palets` : `${nombre} marcado: NO devuelve palets`);
 }
 function eliminarClienteUI(nombre) {
   clientesGuardados = clientesGuardados.filter(c=>c.nombre!==nombre);
