@@ -614,7 +614,11 @@ async function cargarTodo(mostrarLoading) {
     if (data.resultado === 'ok') {
       PINES = { 'admin': '1994' };
       (data.conductores||[]).forEach(c => PINES[c.nombre] = c.pin);
-      clientesGuardados = data.clientes || [];
+      clientesGuardados = (data.clientes || []).map(c => ({
+        nombre: c.nombre,
+        direccion: c.direccion || '',
+        devuelvePalets: c.devuelvePalets === true || c.devuelvePalets === 'true' || c.devuelvePalets === 'TRUE' || false
+      }));
       rutasActivas = data.rutas || [];
       incidencias = data.incidencias || [];
     }
