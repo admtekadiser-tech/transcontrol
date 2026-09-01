@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TransControl — Gestión de Rutas</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>TransControl — Gestión de Rutas v1.5</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1523,8 +1526,19 @@ function renderConfigClientes() {
   if (!cont) return;
   if (!clientesGuardados.length) { cont.innerHTML = `<div class="empty-state"><div class="empty-icono">📋</div>Sin clientes guardados.</div>`; return; }
   cont.innerHTML = clientesGuardados.map(c => `
-    <div class="cliente-config-row">
-      <div class="cliente-config-info"><div class="cliente-config-nombre">${c.nombre}</div><div class="cliente-config-dir">${c.direccion||'Sin dirección'}</div></div>
+    <div class="cliente-config-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
+      <div class="cliente-config-info" style="flex:1;min-width:120px;">
+        <div class="cliente-config-nombre">${c.nombre}</div>
+        <div class="cliente-config-dir">${c.direccion||'Sin dirección'}</div>
+      </div>
+      <button onclick="toggleDevuelvePalets('${c.nombre.replace(/'/g,"\\'")}')"
+        style="background:${c.devuelvePalets?'rgba(245,158,11,.2)':'rgba(255,255,255,.07)'};
+        border:1px solid ${c.devuelvePalets?'var(--amarillo)':'var(--gris-borde)'};
+        color:${c.devuelvePalets?'var(--amarillo)':'var(--blanco-suave)'};
+        border-radius:8px;padding:5px 10px;font-family:Inter,sans-serif;
+        font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">
+        ${c.devuelvePalets?'⭐ Devuelve palets':'☆ No devuelve'}
+      </button>
       <button class="btn-eliminar-conductor" onclick="eliminarClienteUI('${c.nombre.replace(/'/g,"\\'")}')">✕</button>
     </div>`).join('');
 }
