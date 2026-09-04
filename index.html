@@ -379,8 +379,21 @@
           <select id="admin-select-conductor"><option value="">— Selecciona —</option></select>
         </div>
         <div class="campo-grupo" style="margin-bottom:0">
-          <label>🕐 Hora de inicio</label>
+          <label>🕐 Hora de inicio de ruta</label>
           <input type="time" id="admin-hora-inicio">
+        </div>
+      </div>
+      <div class="fila-2col" style="margin-bottom:12px;">
+        <div class="campo-grupo" style="margin-bottom:0">
+          <label>🔔 Hora de aviso al conductor</label>
+          <input type="time" id="admin-hora-aviso" placeholder="Para turnos de noche">
+        </div>
+        <div class="campo-grupo" style="margin-bottom:0">
+          <label>📅 Día del aviso</label>
+          <select id="admin-dia-aviso">
+            <option value="mismo">Mismo día del servicio</option>
+            <option value="anterior">Día anterior (turno de noche)</option>
+          </select>
         </div>
       </div>
 
@@ -514,7 +527,7 @@
 // ══════════════════════════════════════════
 // CONFIG — CAMBIA ESTA URL POR LA TUYA TRAS ACTUALIZAR EL APPS SCRIPT
 // ══════════════════════════════════════════
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzZEnuPObkQiNY98l2fe4Wxlm3XN-fjYMPbAQPpEQoYGdjohcnFqUptyTXbC86O9PEI/exec';
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbz9YhgxZ0xOELlHpFKw9r59JVJBLlL0977-0aec9KLJjqbtCvNKaBsPnX_LXtv8kLOy/exec';
 
 // ══════════════════════════════════════════
 // CLOUDINARY — Subida directa de fotos
@@ -801,10 +814,15 @@ function normalizarNombre(str) {
 function rutasDelConductorVisibles(nombre) {
   const hoy = normalizarFecha(fechaCorta());
   const manana = normalizarFecha(fechaCortaManana());
-  return rutasActivas.filter(r =>
-    normalizarNombre(r.conductor) === normalizarNombre(nombre) &&
-    (normalizarFecha(r.fechaServicio) === hoy || normalizarFecha(r.fechaServicio) === manana)
-  );
+  return rutasActivas.filter(r => {
+    if (normalizarNombre(r.conductor) !== normalizarNombre(nombre)) return false;
+    const fechaRuta = normalizarFecha(r.fechaServicio);
+    // Ruta de hoy o mañana — siempre visible
+    if (fechaRuta === hoy || fechaRuta === manana) return true;
+    // Ruta de mañana con aviso el día anterior (turno de noche)
+    if (fechaRuta === manana && r.diaAviso === 'anterior') return true;
+    return false;
+  });
 }
 
 function rutasDelConductorHoy(nombre) {
@@ -845,12 +863,18 @@ function renderConductor(nombre) {
     const obsHtml = (ruta.observaciones && ruta.observaciones.trim()) ? `
       <div class="obs-card"><div class="obs-card-titulo">⚠️ Indicaciones de administración</div><div class="obs-card-texto">${ruta.observaciones}</div></div>` : '';
 
+    const esTurnoNoche = esManana && ruta.diaAviso === 'anterior';
     const bannerManana = esManana ? `
-      <div style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.3);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:22px">📅</span>
+      <div style="background:${esTurnoNoche?'rgba(249,115,22,.12)':'rgba(139,92,246,.12)'};border:1px solid ${esTurnoNoche?'rgba(249,115,22,.3)':'rgba(139,92,246,.3)'};border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:22px">${esTurnoNoche?'🌙':'📅'}</span>
         <div>
-          <div style="font-size:11px;font-weight:700;color:var(--morado);letter-spacing:1px;text-transform:uppercase;">Ruta para mañana — ${ruta.fechaServicio}</div>
-          <div style="font-size:12px;color:var(--blanco-suave);margin-top:3px;">Puedes consultar los detalles, pero el registro se activa el día del servicio.</div>
+          <div style="font-size:11px;font-weight:700;color:${esTurnoNoche?'var(--naranja)':'var(--morado)'};letter-spacing:1px;text-transform:uppercase;">
+            ${esTurnoNoche?'TURNO DE NOCHE — Ruta del día siguiente ('+ruta.fechaServicio+')':'Ruta para mañana — '+ruta.fechaServicio}
+          </div>
+          <div style="font-size:12px;color:var(--blanco-suave);margin-top:3px;">
+            ${esTurnoNoche?'Tu turno empieza esta noche. El registro se activa mañana al inicio del servicio.':'Puedes consultar los detalles, pero el registro se activa el día del servicio.'}
+          </div>
+          ${esTurnoNoche && ruta.horaAviso ? `<div style="font-size:12px;color:var(--naranja);margin-top:4px;font-weight:700;">🔔 Tu turno empieza a las ${ruta.horaAviso}</div>` : ''}
         </div>
       </div>` : '';
 
@@ -966,7 +990,8 @@ function renderConductor(nombre) {
       <div class="ruta-grupo-header" style="${esManana?'background:linear-gradient(135deg,rgba(139,92,246,.15),rgba(59,130,246,.05))':''}">
         <div class="ruta-grupo-nombre">${ruta.nombreRuta || 'Ruta sin nombre'}</div>
         <div class="ruta-grupo-meta">
-          ${ruta.horaInicio?`<div class="ruta-grupo-meta-item">🕐 Inicio: <strong>${ruta.horaInicio}</strong></div>`:''}
+          ${ruta.horaInicio?`<div class="ruta-grupo-meta-item">🕐 Inicio ruta: <strong>${ruta.horaInicio}</strong></div>`:''}
+          ${ruta.horaAviso?`<div class="ruta-grupo-meta-item" style="color:var(--naranja)">🔔 Aviso conductor: <strong>${ruta.horaAviso}</strong>${ruta.diaAviso==='anterior'?' (día anterior)':''}</div>`:''}
           <div class="ruta-grupo-meta-item">📦 <strong>${esManana?ruta.paradas.length+' paradas':completadas+'/'+ruta.paradas.length+' completadas'}</strong></div>
           <div class="ruta-grupo-meta-item" style="color:${esManana?'var(--morado)':'var(--verde)'}">📅 <strong>${esManana?'MAÑANA — '+ruta.fechaServicio:'HOY'}</strong></div>
         </div>
@@ -1350,6 +1375,8 @@ function crearRuta() {
   const nombreRuta = document.getElementById('admin-nombre-ruta').value.trim();
   if (!nombreRuta){toast('Pon un nombre o número a la ruta','err');return;}
   const horaInicio = document.getElementById('admin-hora-inicio').value;
+  const horaAviso = document.getElementById('admin-hora-aviso').value;
+  const diaAviso = document.getElementById('admin-dia-aviso').value;
   const observaciones = document.getElementById('admin-observaciones').value.trim();
   const bloques = document.querySelectorAll('#inputs-paradas .parada-bloque');
   const paradas=[];
@@ -1372,7 +1399,7 @@ function crearRuta() {
     rutaId: generarRutaId(),
     fechaAsignada: fechaCorta(),
     fechaServicio: fechaInputAFechaCorta(fechaServicioInput),
-    conductor, nombreRuta, horaInicio, observaciones,
+    conductor, nombreRuta, horaInicio, horaAviso, diaAviso, observaciones,
     pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
   };
   rutasActivas.push(ruta);
@@ -1382,6 +1409,8 @@ function crearRuta() {
   document.getElementById('admin-select-conductor').value='';
   document.getElementById('admin-nombre-ruta').value='';
   document.getElementById('admin-hora-inicio').value='';
+  document.getElementById('admin-hora-aviso').value='';
+  document.getElementById('admin-dia-aviso').value='mismo';
   document.getElementById('admin-observaciones').value='';
   document.getElementById('admin-fecha-servicio').value = fechaInputManana();
   quitarPDF();
@@ -1401,6 +1430,7 @@ function renderRutasCreadas() {
         <span class="ruta-nombre-tag">${ruta.nombreRuta}</span>
         <span class="ruta-fecha-tag">📅 ${ruta.fechaServicio}</span>
         ${ruta.horaInicio?`<span class="ruta-hora-tag">🕐 ${ruta.horaInicio}</span>`:''}
+        ${ruta.horaAviso?`<span style="font-size:11px;font-weight:700;background:rgba(249,115,22,.15);color:var(--naranja);padding:3px 8px;border-radius:6px;">🔔 Aviso: ${ruta.horaAviso}${ruta.diaAviso==='anterior'?' (día ant.)':''}</span>`:''}
         ${ruta.pdfNombre?`<span class="ruta-conductor-tag">📄 PDF</span>`:''}
         <button class="btn-reasignar" onclick="abrirModalReasignar('${ruta.rutaId}')">🔄 Reasignar</button>
         <button class="btn-eliminar-ruta" onclick="abrirModalEliminarRuta('${ruta.rutaId}')">✕ Eliminar</button>
