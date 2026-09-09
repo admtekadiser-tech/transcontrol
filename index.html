@@ -586,7 +586,7 @@ async function subirFotoCloudinary(base64, carpeta, nombreArchivo) {
 // ESTADO GLOBAL — TODO SE CARGA DESDE SHEETS
 // ══════════════════════════════════════════
 let usuarioActual = null;
-let PINES = {};
+let PINES = { 'admin': '1994' }; // Admin siempre disponible
 let clientesGuardados = [];
 let rutasActivas = [];
 let incidencias = [];
