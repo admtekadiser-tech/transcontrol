@@ -554,9 +554,10 @@ async function sbFetch(tabla, metodo='GET', body=null, params='') {
 // ══════════════════════════════════════════
 // EMAILJS — Alertas automáticas
 // ══════════════════════════════════════════
-const EMAILJS_SERVICE  = 'service_0c5hs9e';
-const EMAILJS_TEMPLATE = 'template_znfbxvd';
-const EMAILJS_KEY      = 'A5h0FFGfbULWq63jb';
+const EMAILJS_SERVICE           = 'service_0c5hs9e';
+const EMAILJS_TEMPLATE_ESPERA   = 'template_znfbxvd';
+const EMAILJS_TEMPLATE_DEVOL    = 'template_1ny02uq';
+const EMAILJS_KEY               = 'A5h0FFGfbULWq63jb';
 
 function inicializarEmailJS() {
   if (typeof emailjs !== 'undefined') {
@@ -586,7 +587,7 @@ async function enviarAlertaEspera(conductor, ruta, parada) {
   const importeEstimado = franjas * 30; // Estimación base — ajusta según tu tarifa
 
   try {
-    await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE_ESPERA, {
       tipo_alerta:  '⏱️ TIEMPO DE ESPERA EXCEDIDO',
       conductor:    conductor,
       nombre_ruta:  String(ruta.nombreRuta || ''),
@@ -598,7 +599,8 @@ async function enviarAlertaEspera(conductor, ruta, parada) {
       tiempo_total: tiempoTotal,
       franjas:      `${franjas} franja(s) de 30 min`,
       importe:      `~${importeEstimado}€ (verificar tarifa)`,
-      observaciones: parada.incidencia || 'Sin incidencias adicionales'
+      observaciones: parada.incidencia || 'Sin incidencias adicionales',
+      foto_url: ''
     });
     console.log('[EMAIL] Alerta espera enviada:', parada.cliente);
   } catch(err) {
@@ -612,8 +614,8 @@ async function enviarAlertaDevolucion(conductor, ruta, parada) {
   if (!parada.fotoIncidencia && !parada.incidencia) return;
 
   try {
-    await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-      tipo_alerta:  '📦 DEVOLUCIÓN / INCIDENCIA',
+    await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE_DEVOL, {
+      tipo_alerta:  '📦 DEVOLUCION - INCIDENCIA',
       conductor:    conductor,
       nombre_ruta:  String(ruta.nombreRuta || ''),
       cliente:      parada.cliente,
@@ -624,7 +626,10 @@ async function enviarAlertaDevolucion(conductor, ruta, parada) {
       tiempo_total: '—',
       franjas:      '—',
       importe:      'Verificar',
-      observaciones: parada.incidencia || 'Foto de devolución adjunta (ver Cloudinary)'
+      observaciones: parada.incidencia || 'Sin texto de incidencia',
+      foto_url: (parada.fotoIncidencia && !parada.fotoIncidencia.startsWith('data:'))
+        ? parada.fotoIncidencia
+        : 'Foto aún no subida'
     });
     console.log('[EMAIL] Alerta devolución enviada:', parada.cliente);
   } catch(err) {
