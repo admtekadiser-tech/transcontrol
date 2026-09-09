@@ -577,7 +577,7 @@ function calcularTiempoEspera(horaLlegada, horaSalida) {
 async function enviarAlertaEspera(conductor, ruta, parada) {
   if (typeof emailjs === 'undefined') return;
   const minutos = calcularTiempoEspera(parada.llegada, parada.salida);
-  if (!minutos || minutos <= 60) return; // Solo si supera 1 hora
+  if (minutos === null || minutos === undefined || minutos < 60) return; // Estrictamente menos de 60 min, no enviar
 
   const minutosEspera = minutos - 60; // Minutos facturables (después de la 1ª hora gratuita)
   const franjas = Math.ceil(minutosEspera / 30);
@@ -1214,8 +1214,14 @@ function enviarParada(rutaId, pi, ri) {
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
   // Alertas automáticas por email
-  enviarAlertaEspera(usuarioActual, ruta, p);
-  if (p.fotoIncidencia || p.incidencia.trim()) enviarAlertaDevolucion(usuarioActual, ruta, p);
+  const minutosEspera = calcularTiempoEspera(p.llegada, p.salida);
+  console.log('[ALERTA] Minutos espera:', minutosEspera, '| Incidencia:', !!p.incidencia.trim(), '| FotoInc:', !!p.fotoIncidencia);
+  if (minutosEspera !== null && minutosEspera >= 60) {
+    enviarAlertaEspera(usuarioActual, ruta, p);
+  }
+  if (p.fotoIncidencia || p.incidencia.trim()) {
+    enviarAlertaDevolucion(usuarioActual, ruta, p);
+  }
   // Subir fotos a Cloudinary directamente desde el navegador
   const fotoAlbaran = obtenerFotoPendiente(rutaId, pi, 'foto');
   const fotoInc = obtenerFotoPendiente(rutaId, pi, 'inc');
