@@ -527,7 +527,28 @@
 // ══════════════════════════════════════════
 // CONFIG — CAMBIA ESTA URL POR LA TUYA TRAS ACTUALIZAR EL APPS SCRIPT
 // ══════════════════════════════════════════
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbz9YhgxZ0xOELlHpFKw9r59JVJBLlL0977-0aec9KLJjqbtCvNKaBsPnX_LXtv8kLOy/exec';
+// ══════════════════════════════════════════
+// SUPABASE — Base de datos en la nube
+// ══════════════════════════════════════════
+const SUPABASE_URL = 'https://bkcvewmniiwfezqrrovv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_62ZouLNK-tR_-iQfc1zuXA_CvrwG8VX';
+
+async function sbFetch(tabla, metodo='GET', body=null, params='') {
+  const url = SUPABASE_URL + '/rest/v1/' + tabla + params;
+  const opts = {
+    method: metodo,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': metodo === 'POST' ? 'return=representation' : 'return=minimal'
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  if (metodo === 'GET') return await r.json();
+  return r.ok;
+}
 
 // ══════════════════════════════════════════
 // CLOUDINARY — Subida directa de fotos
@@ -635,7 +656,11 @@ async function cargarTodo(mostrarLoading) {
         direccion: c.direccion || '',
         devuelvePalets: c.devuelvePalets === true || c.devuelvePalets === 'true' || c.devuelvePalets === 'TRUE' || false
       }));
-      rutasActivas = data.rutas || [];
+      rutasActivas = (data.rutas || []).map(r => ({
+        ...r,
+        horaInicio: normalizarHora(r.horaInicio),
+        horaAviso: normalizarHora(r.horaAviso)
+      }));
       incidencias = data.incidencias || [];
     }
   } catch(err) {
@@ -654,17 +679,9 @@ async function recargarDatos() {
   toast('✓ Datos actualizados');
 }
 
+// enviarSheets reemplazado por sbFetch directo a Supabase
 function enviarSheets(datos) {
-  const body = JSON.stringify(datos);
-  console.log('[SHEETS] Enviando tipo=' + datos.tipo + ' tamaño=' + Math.round(body.length/1024) + 'KB');
-  return fetch(SHEETS_URL, {
-    method:'POST',
-    mode:'no-cors',
-    headers:{'Content-Type':'text/plain'},
-    body: body
-  }).then(r => {
-    console.log('[SHEETS] Respuesta tipo=' + datos.tipo + ' status=' + r.status);
-  }).catch(err => console.log('[SHEETS] Error tipo=' + datos.tipo + ':', err.message));
+  console.log('[LEGACY] enviarSheets llamado con tipo:', datos.tipo, '— ignorado, usando Supabase');
 }
 
 // ══════════════════════════════════════════
@@ -809,6 +826,28 @@ function normalizarFecha(str) {
 
 function normalizarNombre(str) {
   return String(str || '').trim().toLowerCase();
+}
+
+function normalizarHora(str) {
+  if (!str) return '';
+  str = String(str).trim();
+  // Formato ISO que devuelve Sheets: "1899-12-30T22:29:44.000Z"
+  if (str.includes('T') && str.includes('Z')) {
+    const d = new Date(str);
+    const hh = String(d.getUTCHours()).padStart(2,'0');
+    const mm = String(d.getUTCMinutes()).padStart(2,'0');
+    return hh + ':' + mm;
+  }
+  // Formato decimal (0.9375 = 22:30)
+  const num = parseFloat(str);
+  if (!isNaN(num) && num >= 0 && num < 1) {
+    const totalMin = Math.round(num * 24 * 60);
+    const hh = Math.floor(totalMin / 60);
+    const mm = totalMin % 60;
+    return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+  }
+  // Ya es texto HH:MM
+  return str;
 }
 
 function rutasDelConductorVisibles(nombre) {
@@ -1147,31 +1186,63 @@ function prevFotoInc(rutaId, pi, input) {
 // ══════════════════════════════════════════
 // ENVÍOS A SHEETS
 // ══════════════════════════════════════════
-function guardarRegistroSheets(conductor, ruta, parada) {
-  enviarSheets({ tipo:'registro', fecha:fechaCorta(), conductor, nombreRuta:ruta.nombreRuta,
-    cliente:parada.cliente, direccion:parada.direccion,
-    llegada:parada.llegada||'', inicioDesc:parada.inicioDesc||'',
-    finDesc:parada.finDesc||'', salida:parada.salida||'',
-    incidencia:parada.incidencia||'',
-    paletsEntregados:parada.paletsEntregados||0,
-    paletsRecogidos:parada.paletsRecogidos||0,
-    evoucher:parada.evoucher||''
+async function guardarRegistroSheets(conductor, ruta, parada) {
+  await sbFetch('registros', 'POST', {
+    fecha: fechaCorta(),
+    conductor,
+    nombre_ruta: String(ruta.nombreRuta||''),
+    cliente: parada.cliente,
+    direccion: parada.direccion,
+    llegada: parada.llegada||'',
+    ini_descarga: parada.inicioDesc||'',
+    fin_descarga: parada.finDesc||'',
+    salida: parada.salida||'',
+    incidencia: parada.incidencia||'',
+    palets_entregados: parada.paletsEntregados||0,
+    palets_recogidos: parada.paletsRecogidos||0,
+    evoucher: parada.evoucher||''
   });
 }
-function guardarIncidenciaSheets(inc) {
-  enviarSheets({ tipo:'incidencia', fecha:inc.fecha, hora:inc.hora, conductor:inc.conductor, nombreRuta:inc.nombreRuta, cliente:inc.cliente, direccion:inc.direccion, texto:inc.texto, foto:inc.foto||'' });
+async function guardarIncidenciaSheets(inc) {
+  await sbFetch('incidencias', 'POST', {
+    fecha: inc.fecha,
+    hora: inc.hora,
+    conductor: inc.conductor,
+    nombre_ruta: inc.nombreRuta||'',
+    cliente: inc.cliente,
+    direccion: inc.direccion,
+    texto: inc.texto,
+    foto_url: inc.foto||''
+  });
 }
-function guardarRutaSheets(ruta) {
-  // Enviar paradas SIN fotos para evitar peticiones demasiado grandes que Google rechaza
-  const paradasSinFotos = ruta.paradas.map(p => ({
+async function guardarRutaSheets(ruta) {
+  const paradasLimpias = ruta.paradas.map(p => ({
     cliente: p.cliente, direccion: p.direccion,
     llegada: p.llegada||null, inicioDesc: p.inicioDesc||null,
     finDesc: p.finDesc||null, salida: p.salida||null,
     incidencia: p.incidencia||'', enviado: p.enviado||false,
+    paletsEntregados: p.paletsEntregados||0,
+    paletsRecogidos: p.paletsRecogidos||0,
+    evoucher: p.evoucher||'',
     foto: (p.foto && !p.foto.startsWith('data:')) ? p.foto : '',
     fotoIncidencia: (p.fotoIncidencia && !p.fotoIncidencia.startsWith('data:')) ? p.fotoIncidencia : ''
   }));
-  enviarSheets({ tipo:'ruta', rutaId:ruta.rutaId, fechaAsignada:ruta.fechaAsignada, fechaServicio:ruta.fechaServicio, conductor:ruta.conductor, nombreRuta:ruta.nombreRuta, horaInicio:ruta.horaInicio||'', observaciones:ruta.observaciones||'', pdfNombre:ruta.pdfNombre||'', pdfData:'', paradas:paradasSinFotos });
+  const body = {
+    ruta_id: ruta.rutaId,
+    fecha_asignada: ruta.fechaAsignada,
+    fecha_servicio: ruta.fechaServicio,
+    conductor: ruta.conductor,
+    nombre_ruta: String(ruta.nombreRuta||''),
+    hora_inicio: ruta.horaInicio||'',
+    hora_aviso: ruta.horaAviso||'',
+    dia_aviso: ruta.diaAviso||'mismo',
+    observaciones: ruta.observaciones||'',
+    pdf_nombre: ruta.pdfNombre||'',
+    pdf_data: '',
+    paradas: paradasLimpias
+  };
+  // Upsert — crea o actualiza según ruta_id
+  await sbFetch('rutas_activas', 'POST', body, '?on_conflict=ruta_id');
 }
 
 async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
@@ -1186,12 +1257,17 @@ async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor,
 
   if (url) {
     toast('✓ Foto guardada en la nube');
-    // Guardar URL en Sheets
-    enviarSheets({
-      tipo: 'foto_parada',
-      rutaId, pi, tipoFoto: tipo,
-      foto: url,
-      conductor, fechaServicio, cliente
+    // Actualizar URL de foto en Supabase dentro de las paradas de la ruta
+    const ruta = rutasActivas.find(r => r.rutaId === rutaId);
+    if (ruta && ruta.paradas[pi]) {
+      if (tipo === 'albaran') ruta.paradas[pi].foto = url;
+      else ruta.paradas[pi].fotoIncidencia = url;
+      await guardarRutaSheets(ruta);
+    }
+    // Guardar en tabla fotos
+    await sbFetch('fotos', 'POST', {
+      fecha: fechaServicio, conductor, ruta_id: rutaId,
+      cliente, tipo, url
     });
   } else {
     toast('⚠️ No se pudo subir la foto', 'err');
@@ -1202,13 +1278,7 @@ function enviarFotoSheets(rutaId, pi, tipo, base64, conductor, fechaServicio, cl
   // Ya no se usa — sustituida por enviarFotoCloudinaryYGuardar
 }
 function guardarCalendarSheets(ruta) {
-  const descripcion = ruta.paradas.map((p,i)=>{
-    let l = `Parada ${i+1} — ${p.cliente}\n`;
-    l += `Llegada: ${p.llegada||'—'} | Descarga: ${p.inicioDesc||'—'} a ${p.finDesc||'—'} | Salida: ${p.salida||'—'}`;
-    if (p.incidencia) l += `\n⚠️ Incidencia: ${p.incidencia}`;
-    return l;
-  }).join('\n\n');
-  enviarSheets({ tipo:'calendar', fechaCorta:ruta.fechaServicio, conductor:ruta.conductor, nombreRuta:ruta.nombreRuta, horaInicio:ruta.horaInicio||'', descripcion, numParadas:ruta.paradas.length });
+  // Ya no se usa con Supabase — el historial vive en la tabla registros
 }
 
 // ══════════════════════════════════════════
@@ -1447,9 +1517,9 @@ function abrirModalEliminarRuta(rutaId) {
   document.getElementById('modal-eliminar-ruta').classList.add('activo');
 }
 function cerrarModalEliminarRuta() { document.getElementById('modal-eliminar-ruta').classList.remove('activo'); rutaAEliminar=null; }
-function confirmarEliminarRuta() {
+async function confirmarEliminarRuta() {
   rutasActivas = rutasActivas.filter(r=>r.rutaId!==rutaAEliminar);
-  enviarSheets({tipo:'reset_jornada', fechaServicio: null, rutaIdUnico: rutaAEliminar});
+  await sbFetch('rutas_activas', 'DELETE', null, `?ruta_id=eq.${encodeURIComponent(rutaAEliminar)}`);
   cerrarModalEliminarRuta();
   renderRutasCreadas(); renderTiempoReal();
   toast('✓ Ruta eliminada');
@@ -1463,15 +1533,14 @@ function abrirModalReasignar(rutaId) {
   document.getElementById('modal-reasignar').classList.add('activo');
 }
 function cerrarModal() { document.getElementById('modal-reasignar').classList.remove('activo'); conductorAReasignar=null; }
-function confirmarReasignacion() {
+async function confirmarReasignacion() {
   const nuevo = document.getElementById('modal-conductor-nuevo').value;
   if (!nuevo) { toast('Selecciona un conductor','err'); return; }
   const ruta = rutasActivas.find(r=>r.rutaId===conductorAReasignar);
   if (!ruta) return;
   const anterior = ruta.conductor;
   ruta.conductor = nuevo;
-  enviarSheets({tipo:'reasignar', rutaId:ruta.rutaId, nuevoConductor:nuevo});
-  guardarCalendarSheets(ruta);
+  await sbFetch('rutas_activas', 'PATCH', {conductor: nuevo}, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
   toast(`✓ Ruta transferida de ${anterior} a ${nuevo}`);
   cerrarModal();
   renderRutasCreadas(); renderTiempoReal();
@@ -1479,37 +1548,37 @@ function confirmarReasignacion() {
 
 function abrirModalReset() { document.getElementById('modal-reset').classList.add('activo'); }
 function cerrarModalReset() { document.getElementById('modal-reset').classList.remove('activo'); }
-function confirmarReset() {
+async function confirmarReset() {
   const fechaInput = document.getElementById('reset-fecha').value;
   const fechaC = fechaInputAFechaCorta(fechaInput);
   rutasActivas = rutasActivas.filter(r=>r.fechaServicio !== fechaC);
-  enviarSheets({tipo:'reset_jornada', fechaServicio: fechaC});
+  await sbFetch('rutas_activas', 'DELETE', null, `?fecha_servicio=eq.${encodeURIComponent(fechaC)}`);
   cerrarModalReset();
   renderRutasCreadas(); renderTiempoReal();
   toast(`✓ Rutas del ${fechaC} eliminadas`);
 }
 
-function añadirConductorUI() {
+async function añadirConductorUI() {
   const nombre = document.getElementById('nuevo-conductor-nombre').value.trim();
   const pin = document.getElementById('nuevo-conductor-pin').value.trim();
   if (!nombre) { toast('Escribe el nombre del conductor','err'); return; }
   if (!/^[0-9]{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos','err'); return; }
   if (PINES[nombre]) { toast('Ya existe un conductor con ese nombre','err'); return; }
-  if (Object.values(PINES).includes(pin)) { toast('Ese PIN ya está en uso','err'); return; }
+  if (Object.values(PINES).filter(p=>p!=='1994').includes(pin)) { toast('Ese PIN ya está en uso','err'); return; }
   PINES[nombre] = pin;
-  enviarSheets({tipo:'conductor_add', nombre, pin});
+  await sbFetch('conductores', 'POST', {nombre, pin});
   document.getElementById('nuevo-conductor-nombre').value='';
   document.getElementById('nuevo-conductor-pin').value='';
   actualizarSelectsConductores();
   renderConfigConductores();
   toast(`✓ Conductor "${nombre}" añadido con PIN ${pin}`);
 }
-function eliminarConductorUI(nombre) {
+async function eliminarConductorUI(nombre) {
   if (rutasActivas.some(r=>r.conductor===nombre)) {
     if (!confirm(`${nombre} tiene rutas asignadas. ¿Eliminar igualmente?`)) return;
   }
   delete PINES[nombre];
-  enviarSheets({tipo:'conductor_del', nombre});
+  await sbFetch('conductores', 'DELETE', null, `?nombre=eq.${encodeURIComponent(nombre)}`);
   actualizarSelectsConductores();
   renderConfigConductores();
   toast(`Conductor "${nombre}" eliminado`);
@@ -1524,30 +1593,30 @@ function renderConfigConductores() {
       <button class="btn-eliminar-conductor" onclick="eliminarConductorUI('${nombre.replace(/'/g,"\\'")}')">✕ Eliminar</button>
     </div>`).join('');
 }
-function añadirClienteUI() {
+async function añadirClienteUI() {
   const nombre = document.getElementById('nuevo-cliente-nombre').value.trim();
   const dir = document.getElementById('nuevo-cliente-dir').value.trim();
   if (!nombre) { toast('Escribe el nombre del cliente','err'); return; }
   if (clientesGuardados.find(c=>c.nombre===nombre)) { toast('Ese cliente ya existe','err'); return; }
   clientesGuardados.push({nombre, direccion:dir, devuelvePalets:false});
-  enviarSheets({tipo:'cliente_add', nombre, direccion:dir, devuelvePalets:false});
+  await sbFetch('clientes', 'POST', {nombre, direccion:dir, devuelve_palets:false});
   document.getElementById('nuevo-cliente-nombre').value='';
   document.getElementById('nuevo-cliente-dir').value='';
   renderConfigClientes();
   toast(`✓ Cliente "${nombre}" añadido`);
 }
 
-function toggleDevuelvePalets(nombre) {
+async function toggleDevuelvePalets(nombre) {
   const c = clientesGuardados.find(c=>c.nombre===nombre);
   if (!c) return;
   c.devuelvePalets = !c.devuelvePalets;
-  enviarSheets({tipo:'cliente_update_palets', nombre, devuelvePalets: c.devuelvePalets});
+  await sbFetch('clientes', 'PATCH', {devuelve_palets: c.devuelvePalets}, `?nombre=eq.${encodeURIComponent(nombre)}`);
   renderConfigClientes();
   toast(c.devuelvePalets ? `⭐ ${nombre} marcado: devuelve palets` : `${nombre} marcado: NO devuelve palets`);
 }
-function eliminarClienteUI(nombre) {
+async function eliminarClienteUI(nombre) {
   clientesGuardados = clientesGuardados.filter(c=>c.nombre!==nombre);
-  enviarSheets({tipo:'cliente_del', nombre});
+  await sbFetch('clientes', 'DELETE', null, `?nombre=eq.${encodeURIComponent(nombre)}`);
   renderConfigClientes();
   toast(`Cliente "${nombre}" eliminado`);
 }
