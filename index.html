@@ -1377,17 +1377,21 @@ async function guardarRutaSheets(ruta) {
     pdf_data: '',
     paradas: paradasLimpias
   };
-  // Intentar PATCH primero, si no existe hacer POST
-  console.log('[SUPABASE] Intentando PATCH para ruta:', ruta.rutaId);
-  const patch = await sbFetch('rutas_activas', 'PATCH', body, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
-  console.log('[SUPABASE] PATCH resultado:', patch);
-  if (!patch) {
-    console.log('[SUPABASE] PATCH falló, intentando POST...');
-    const post = await sbFetch('rutas_activas', 'POST', body, '');
-    console.log('[SUPABASE] POST resultado:', post);
-    return post;
+  // Verificar si la ruta ya existe en Supabase
+  console.log('[SUPABASE] Verificando si existe ruta:', ruta.rutaId);
+  const existente = await sbFetch('rutas_activas', 'GET', null, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}&select=id`);
+  if (existente && existente.length > 0) {
+    // Ruta existe — actualizar con PATCH
+    console.log('[SUPABASE] Ruta existe, haciendo PATCH...');
+    await sbFetch('rutas_activas', 'PATCH', body, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
+    console.log('[SUPABASE] PATCH completado');
+  } else {
+    // Ruta nueva — insertar con POST
+    console.log('[SUPABASE] Ruta nueva, haciendo POST...');
+    await sbFetch('rutas_activas', 'POST', body, '');
+    console.log('[SUPABASE] POST completado');
   }
-  return patch;
+  return true;
 }
 
 async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
