@@ -1360,8 +1360,11 @@ async function guardarRutaSheets(ruta) {
     pdf_data: '',
     paradas: paradasLimpias
   };
-  // Upsert — crea o actualiza según ruta_id
-  await sbFetch('rutas_activas', 'POST', body, '?on_conflict=ruta_id');
+  // Intentar PATCH primero, si no existe hacer POST
+  const patch = await sbFetch('rutas_activas', 'PATCH', body, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
+  if (!patch) {
+    await sbFetch('rutas_activas', 'POST', body, '');
+  }
 }
 
 async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
