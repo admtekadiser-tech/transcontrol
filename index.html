@@ -629,7 +629,7 @@ async function enviarAlertaDevolucion(conductor, ruta, parada) {
       observaciones: parada.incidencia || 'Sin texto de incidencia',
       foto_url: (parada.fotoIncidencia && !parada.fotoIncidencia.startsWith('data:'))
         ? parada.fotoIncidencia
-        : 'Foto aún no subida'
+        : ''
     });
     console.log('[EMAIL] Alerta devolución enviada:', parada.cliente);
   } catch(err) {
@@ -683,6 +683,15 @@ let conductorAReasignar = null;
 
 // Almacén global de fotos — se llena en el momento de seleccionar, antes de que Safari las descarte
 const FOTOS_PENDIENTES = {};  // clave: "rutaId-pi-tipo" → base64
+const URLS_CLOUDINARY = {};   // clave: "rutaId-pi-tipo" → URL subida
+
+function guardarURLCloudinary(rutaId, pi, tipo, url) {
+  URLS_CLOUDINARY[rutaId + '-' + pi + '-' + tipo] = url;
+}
+
+function obtenerURLCloudinary(rutaId, pi, tipo) {
+  return URLS_CLOUDINARY[rutaId + '-' + pi + '-' + tipo] || '';
+}
 
 // Comprimir imagen antes de guardar — reduce tamaño para enviar a Sheets
 function comprimirImagen(base64, maxWidth, calidad, callback) {
@@ -1180,7 +1189,7 @@ function registrarHora(ri, pi, campo) {
   },50);
 }
 
-function enviarParada(rutaId, pi, ri) {
+async function enviarParada(rutaId, pi, ri) {
   const ruta = rutasActivas.find(r => r.rutaId === rutaId);
   if (!ruta) return;
   const p = ruta.paradas[pi];
@@ -1191,7 +1200,7 @@ function enviarParada(rutaId, pi, ri) {
   p.evoucher = document.getElementById('evoucher-' + ri + '-' + pi).value||'';
   p.enviado = true;
 
-  // Recuperar fotos del almacén global usando rutaId como clave estable
+  // Recuperar fotos del almacén global
   p.foto = obtenerFotoPendiente(rutaId, pi, 'foto');
   p.fotoIncidencia = obtenerFotoPendiente(rutaId, pi, 'inc');
 
@@ -1213,32 +1222,39 @@ function enviarParada(rutaId, pi, ri) {
   guardarRegistroSheets(usuarioActual, ruta, p);
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
-  // Alertas automáticas por email
+
+  // Subir fotos a Cloudinary y ESPERAR a que terminen antes de enviar emails
+  const fotoAlbaran = obtenerFotoPendiente(rutaId, pi, 'foto');
+  const fotoInc = obtenerFotoPendiente(rutaId, pi, 'inc');
+
+  if (fotoAlbaran && fotoAlbaran.startsWith('data:')) {
+    await enviarFotoCloudinaryYGuardar(rutaId, pi, 'albaran', fotoAlbaran, usuarioActual, ruta.fechaServicio, p.cliente);
+    // Actualizar p.foto con la URL de Cloudinary
+    p.foto = obtenerURLCloudinary(rutaId, pi, 'albaran') || p.foto;
+  }
+  if (fotoInc && fotoInc.startsWith('data:')) {
+    await enviarFotoCloudinaryYGuardar(rutaId, pi, 'incidencia', fotoInc, usuarioActual, ruta.fechaServicio, p.cliente);
+    // Actualizar p.fotoIncidencia con la URL de Cloudinary
+    p.fotoIncidencia = obtenerURLCloudinary(rutaId, pi, 'incidencia') || p.fotoIncidencia;
+  }
+
+  // Ahora sí enviar emails — las fotos ya tienen URL de Cloudinary
   const minutosEspera = calcularTiempoEspera(p.llegada, p.salida);
   console.log('[ALERTA] Minutos espera:', minutosEspera, '| Incidencia:', !!p.incidencia.trim(), '| FotoInc:', !!p.fotoIncidencia);
-  if (minutosEspera !== null && minutosEspera >= 60) {
+  if (minutosEspera !== null && minutosEspera > 60) {
     enviarAlertaEspera(usuarioActual, ruta, p);
   }
   if (p.fotoIncidencia || p.incidencia.trim()) {
     enviarAlertaDevolucion(usuarioActual, ruta, p);
   }
-  // Subir fotos a Cloudinary directamente desde el navegador
-  const fotoAlbaran = obtenerFotoPendiente(rutaId, pi, 'foto');
-  const fotoInc = obtenerFotoPendiente(rutaId, pi, 'inc');
-  if (fotoAlbaran && fotoAlbaran.startsWith('data:')) {
-    enviarFotoCloudinaryYGuardar(rutaId, pi, 'albaran', fotoAlbaran, usuarioActual, ruta.fechaServicio, p.cliente);
-  }
-  if (fotoInc && fotoInc.startsWith('data:')) {
-    enviarFotoCloudinaryYGuardar(rutaId, pi, 'incidencia', fotoInc, usuarioActual, ruta.fechaServicio, p.cliente);
-  }
+
   limpiarFotosPendientes(rutaId, pi);
   toast('✓ Parada registrada');
   renderConductor(usuarioActual);
 }
 
 function _legacy_unused(ri, pi) {
-  // no usar
-// no usar — legacy
+  // no usar — legacy
 }
 
 function actualizarPalets(ri, pi) {
@@ -1379,7 +1395,10 @@ async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor,
 
   if (url) {
     toast('✓ Foto guardada en la nube');
-    // Actualizar URL de foto en Supabase dentro de las paradas de la ruta
+    // Guardar URL para que enviarParada pueda usarla en el email
+    const tipoKey = tipo === 'albaran' ? 'albaran' : 'incidencia';
+    guardarURLCloudinary(rutaId, pi, tipoKey, url);
+    // Actualizar URL en la ruta en memoria
     const ruta = rutasActivas.find(r => r.rutaId === rutaId);
     if (ruta && ruta.paradas[pi]) {
       if (tipo === 'albaran') ruta.paradas[pi].foto = url;
@@ -1559,7 +1578,7 @@ function crearParadaObj(cliente, direccion) {
   return { cliente, direccion, llegada:null, inicioDesc:null, finDesc:null, salida:null, incidencia:"", foto:null, fotoIncidencia:null, enviado:false };
 }
 
-function crearRuta() {
+async function crearRuta() {
   const conductor = document.getElementById('admin-select-conductor').value;
   if (!conductor){toast('Selecciona un conductor','err');return;}
   const fechaServicioInput = document.getElementById('admin-fecha-servicio').value;
@@ -1595,7 +1614,7 @@ function crearRuta() {
     pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
   };
   rutasActivas.push(ruta);
-  guardarRutaSheets(ruta);
+  await guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
   toast(`✓ Ruta "${nombreRuta}" asignada a ${conductor} para el ${ruta.fechaServicio}`);
   document.getElementById('admin-select-conductor').value='';
