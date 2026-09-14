@@ -1512,7 +1512,7 @@ async function adjuntarPDF(input) {
       // Subir PDF a Cloudinary
       const formData = new FormData();
       formData.append('file', e.target.result);
-      formData.append('upload_preset', CLOUDINARY_PRESET);
+      formData.append('upload_preset', 'transcontrol_pdf');
       formData.append('folder', 'TransControl/PDFs');
       formData.append('public_id', 'pdf_' + Date.now());
       formData.append('resource_type', 'auto');
