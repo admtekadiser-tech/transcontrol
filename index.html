@@ -1452,14 +1452,14 @@ function renderTiempoReal() {
     <div class="stat-card"><div class="stat-numero stat-verde">${comp}</div><div class="stat-label">Completadas</div></div>
     <div class="stat-card"><div class="stat-numero" style="color:var(--amarillo)">${enCurso}</div><div class="stat-label">En curso</div></div>
     <div class="stat-card"><div class="stat-numero" style="color:var(--blanco-suave)">${total-comp-enCurso}</div><div class="stat-label">Pendientes</div></div>
-    <div class="stat-card"><div class="stat-numero stat-rojo">${incidencias.length}</div><div class="stat-label">Incidencias</div></div>`;
+    <div class="stat-card"><div class="stat-numero stat-rojo">${incidencias.filter(i=>!i.gestionada).length}</div><div class="stat-label">Incidencias</div></div>`;
   const cont = document.getElementById('lista-conductores-admin');
   if (!conductoresConRuta.length){cont.innerHTML=`<div class="empty-state"><div class="empty-icono">🚛</div>Sin rutas asignadas.</div>`;return;}
   cont.innerHTML = conductoresConRuta.map((nombre,ci)=>{
     const rutasC = rutasActivas.filter(r=>r.conductor===nombre);
     const totalParadasC = rutasC.reduce((a,r)=>a+r.paradas.length,0);
     const compC = rutasC.reduce((a,r)=>a+r.paradas.filter(p=>p.enviado).length,0);
-    const incC = incidencias.filter(i=>i.conductor===nombre).length;
+    const incC = incidencias.filter(i=>i.conductor===nombre && !i.gestionada).length;
     const rutasHtml = rutasC.map(ruta=>{
       const detalle = ruta.paradas.map(p=>{
         const e=p.enviado?'ok':p.llegada?'curso':'pendiente';
@@ -1809,15 +1809,16 @@ async function marcarIncidenciaGestionada(id) {
 function renderIncidencias() {
   const cont = document.getElementById('lista-incidencias');
   const pendientes = incidencias.filter(i => !i.gestionada);
-  const gestionadas = incidencias.filter(i => i.gestionada);
 
-  if (!incidencias.length) {
-    cont.innerHTML = `<div class="empty-state"><div class="empty-icono">✅</div>Sin incidencias.</div>`;
+  if (!pendientes.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icono">✅</div>Sin incidencias pendientes.</div>`;
     return;
   }
 
-  const renderCard = (inc, esGestionada) => `
-    <div class="incidencia-card" style="${esGestionada ? 'opacity:0.5;' : ''}">
+  cont.innerHTML =
+    `<div style="font-size:11px;font-weight:700;color:var(--rojo);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">⚠️ Pendientes (${pendientes.length})</div>` +
+    [...pendientes].reverse().map(inc => `
+    <div class="incidencia-card">
       <div class="incidencia-header">
         <div class="avatar" style="width:30px;height:30px;font-size:12px">${inc.conductor.charAt(0)}</div>
         <div style="flex:1">
@@ -1826,22 +1827,15 @@ function renderIncidencias() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <div class="incidencia-hora-txt">${inc.fecha} ${inc.hora}</div>
-          ${!esGestionada ? `<button onclick="marcarIncidenciaGestionada('${inc.id}')"
+          <button onclick="marcarIncidenciaGestionada('${inc.id}')"
             style="background:rgba(34,197,94,.15);border:1px solid var(--verde);color:var(--verde);
             border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;
-            font-family:Inter,sans-serif;white-space:nowrap;">✓ Gestionar</button>` :
-            `<span style="font-size:11px;color:var(--verde);font-weight:700;">✓ Gestionada</span>`}
+            font-family:Inter,sans-serif;white-space:nowrap;">✓ Gestionar</button>
         </div>
       </div>
       <div class="incidencia-texto">${inc.texto}</div>
       ${inc.foto ? `<img src="${inc.foto}" class="incidencia-foto">` : ''}
-    </div>`;
-
-  cont.innerHTML =
-    (pendientes.length ? `<div style="font-size:11px;font-weight:700;color:var(--rojo);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">⚠️ Pendientes (${pendientes.length})</div>` : '') +
-    [...pendientes].reverse().map(i => renderCard(i, false)).join('') +
-    (gestionadas.length ? `<div style="font-size:11px;font-weight:700;color:var(--verde);letter-spacing:1px;text-transform:uppercase;margin:16px 0 10px;">✓ Gestionadas (${gestionadas.length})</div>` : '') +
-    [...gestionadas].reverse().map(i => renderCard(i, true)).join('');
+    </div>`).join('');
 }
 
 // ══════════════════════════════════════════
