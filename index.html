@@ -1503,41 +1503,44 @@ async function adjuntarPDF(input) {
   if (!input.files[0]) return;
   const file = input.files[0];
   pdfAdminNombre = file.name;
-  document.getElementById('pdf-nombre-admin').textContent = '⏳ Subiendo PDF...';
   document.getElementById('pdf-adjunto-preview').style.display='flex';
+  document.getElementById('pdf-nombre-admin').textContent = '⏳ Subiendo PDF...';
 
-  const r = new FileReader();
-  r.onload = async e => {
-    try {
-      // Subir PDF a Cloudinary
-      const formData = new FormData();
-      formData.append('file', e.target.result);
-      formData.append('upload_preset', 'transcontrol_pdf');
-      formData.append('folder', 'TransControl/PDFs');
-      formData.append('public_id', 'pdf_' + Date.now());
-      formData.append('resource_type', 'auto');
+  try {
+    const formData = new FormData();
+    formData.append('file', file); // Subir directamente como File, no base64
+    formData.append('upload_preset', 'transcontrol_pdf');
+    formData.append('folder', 'TransControl/PDFs');
+    formData.append('use_filename', 'true');
+    formData.append('unique_filename', 'true');
+    formData.append('resource_type', 'auto');
 
-      const resp = await fetch(
-        'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/raw/upload',
-        { method: 'POST', body: formData }
-      );
-      const data = await resp.json();
-      if (data.secure_url) {
-        pdfAdminData = data.secure_url;
-        document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre + ' ✓';
-        toast('✓ PDF subido correctamente');
-      } else {
-        // Fallback: guardar base64 directamente
-        pdfAdminData = e.target.result;
-        document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre;
-        toast('PDF adjunto (modo local)');
+    const resp = await fetch(
+      'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/raw/upload',
+      { method: 'POST', body: formData }
+    );
+    const data = await resp.json();
+    if (data.secure_url) {
+      // Asegurar que la URL termina en .pdf para que el navegador lo abra correctamente
+      let url = data.secure_url;
+      if (!url.endsWith('.pdf') && !url.includes('.pdf?')) {
+        url = url + '.pdf';
       }
-    } catch(err) {
-      pdfAdminData = e.target.result;
-      document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre;
+      pdfAdminData = url;
+      document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre + ' ✓';
+      toast('✓ PDF subido correctamente');
+    } else {
+      console.error('[PDF] Error Cloudinary:', data);
+      document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre + ' ⚠️';
+      toast('⚠️ Error al subir PDF: ' + (data.error?.message || 'Error desconocido'), 'err');
+      pdfAdminData = '';
     }
-  };
-  r.readAsDataURL(file);
+  } catch(err) {
+    console.error('[PDF] Error:', err);
+    document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre + ' ⚠️';
+    toast('⚠️ Error al subir PDF', 'err');
+    pdfAdminData = '';
+  }
 }
 function quitarPDF() {
   pdfAdminData = null; pdfAdminNombre = '';
