@@ -1516,7 +1516,7 @@ async function adjuntarPDF(input) {
     formData.append('resource_type', 'auto');
 
     const resp = await fetch(
-      'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/raw/upload',
+      'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/auto/upload',
       { method: 'POST', body: formData }
     );
     const data = await resp.json();
