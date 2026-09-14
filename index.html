@@ -1017,7 +1017,10 @@ function renderConductor(nombre) {
       <div class="pdf-card">
         <div class="pdf-card-icono">📄</div>
         <div class="pdf-card-info"><div class="pdf-card-titulo">Cita de descarga</div><div class="pdf-card-nombre">${ruta.pdfNombre}</div></div>
-        ${ruta.pdfData ? `<a class="btn-descargar-pdf" href="${ruta.pdfData}" download="${ruta.pdfNombre}" target="_blank">⬇ Descargar</a><a class="btn-descargar-pdf" style="margin-left:6px;background:var(--azul)" href="${ruta.pdfData}" target="_blank">👁 Ver</a>` : '<span style="font-size:11px;color:var(--blanco-suave)">PDF no disponible</span>'}
+        ${ruta.pdfData ? `
+          <a class="btn-descargar-pdf" href="${ruta.pdfData}" target="_blank" download="${ruta.pdfNombre}">⬇ Descargar</a>
+          <a class="btn-descargar-pdf" style="margin-left:6px;background:var(--azul)" href="${ruta.pdfData}" target="_blank">👁 Ver</a>
+        ` : '<span style="font-size:11px;color:var(--blanco-suave)">PDF no disponible</span>'}
       </div>` : '';
 
     const obsHtml = (ruta.observaciones && ruta.observaciones.trim()) ? `
@@ -1383,7 +1386,7 @@ async function guardarRutaSheets(ruta) {
     dia_aviso: ruta.diaAviso||'mismo',
     observaciones: ruta.observaciones||'',
     pdf_nombre: ruta.pdfNombre||'',
-    pdf_data: '',
+    pdf_data: ruta.pdfData||'',
     paradas: paradasLimpias
   };
   // Verificar si la ruta ya existe en Supabase
@@ -1496,15 +1499,43 @@ function renderTabla() {
   document.getElementById('tbody-registro').innerHTML=filas.length?filas.join(''):`<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--blanco-suave)">Sin rutas activas. Consulta el histórico en Google Sheets → pestaña Registros.</td></tr>`;
 }
 
-function adjuntarPDF(input) {
+async function adjuntarPDF(input) {
   if (!input.files[0]) return;
   const file = input.files[0];
   pdfAdminNombre = file.name;
+  document.getElementById('pdf-nombre-admin').textContent = '⏳ Subiendo PDF...';
+  document.getElementById('pdf-adjunto-preview').style.display='flex';
+
   const r = new FileReader();
-  r.onload = e => {
-    pdfAdminData = e.target.result;
-    document.getElementById('pdf-adjunto-preview').style.display='flex';
-    document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre;
+  r.onload = async e => {
+    try {
+      // Subir PDF a Cloudinary
+      const formData = new FormData();
+      formData.append('file', e.target.result);
+      formData.append('upload_preset', CLOUDINARY_PRESET);
+      formData.append('folder', 'TransControl/PDFs');
+      formData.append('public_id', 'pdf_' + Date.now());
+      formData.append('resource_type', 'auto');
+
+      const resp = await fetch(
+        'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/raw/upload',
+        { method: 'POST', body: formData }
+      );
+      const data = await resp.json();
+      if (data.secure_url) {
+        pdfAdminData = data.secure_url;
+        document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre + ' ✓';
+        toast('✓ PDF subido correctamente');
+      } else {
+        // Fallback: guardar base64 directamente
+        pdfAdminData = e.target.result;
+        document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre;
+        toast('PDF adjunto (modo local)');
+      }
+    } catch(err) {
+      pdfAdminData = e.target.result;
+      document.getElementById('pdf-nombre-admin').textContent = pdfAdminNombre;
+    }
   };
   r.readAsDataURL(file);
 }
