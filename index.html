@@ -746,7 +746,7 @@ async function cargarTodo(mostrarLoading) {
       sbFetch('conductores', 'GET', null, '?select=nombre,pin&order=nombre'),
       sbFetch('clientes', 'GET', null, '?select=nombre,direccion,devuelve_palets&order=nombre'),
       sbFetch('rutas_activas', 'GET', null, '?select=*&order=fecha_servicio'),
-      sbFetch('incidencias', 'GET', null, '?select=*&order=created_at.desc&limit=100')
+      sbFetch('incidencias', 'GET', null, '?select=*&order=gestionada.asc,created_at.desc&limit=200')
     ]);
 
     PINES = { 'admin': '1994' };
@@ -774,9 +774,11 @@ async function cargarTodo(mostrarLoading) {
     }));
 
     incidencias = (incidenciasData||[]).map(i => ({
+      id: i.id,
       fecha: i.fecha, hora: i.hora, conductor: i.conductor,
       nombreRuta: i.nombre_ruta, cliente: i.cliente,
-      direccion: i.direccion, texto: i.texto, foto: i.foto_url
+      direccion: i.direccion, texto: i.texto, foto: i.foto_url,
+      gestionada: i.gestionada || false
     }));
 
   } catch(err) {
@@ -1015,7 +1017,7 @@ function renderConductor(nombre) {
       <div class="pdf-card">
         <div class="pdf-card-icono">📄</div>
         <div class="pdf-card-info"><div class="pdf-card-titulo">Cita de descarga</div><div class="pdf-card-nombre">${ruta.pdfNombre}</div></div>
-        ${ruta.pdfData ? `<a class="btn-descargar-pdf" href="${ruta.pdfData}" download="${ruta.pdfNombre}">⬇ Descargar</a>` : ''}
+        ${ruta.pdfData ? `<a class="btn-descargar-pdf" href="${ruta.pdfData}" download="${ruta.pdfNombre}" target="_blank">⬇ Descargar</a><a class="btn-descargar-pdf" style="margin-left:6px;background:var(--azul)" href="${ruta.pdfData}" target="_blank">👁 Ver</a>` : '<span style="font-size:11px;color:var(--blanco-suave)">PDF no disponible</span>'}
       </div>` : '';
 
     const obsHtml = (ruta.observaciones && ruta.observaciones.trim()) ? `
@@ -1138,7 +1140,15 @@ function renderConductor(nombre) {
           </div>
           ${p.enviado
             ? `<div class="aviso-enviado">✓ Parada registrada</div>`
-            : `<button class="btn-enviar-parada" id="btn-registrar-${ruta.rutaId}-${i}" onclick="enviarParada('${ruta.rutaId}',${i},${ri})">Registrar parada</button>`
+            : (() => {
+                const todosCom = p.llegada && p.inicioDesc && p.finDesc && p.salida;
+                return `<button class="btn-enviar-parada" id="btn-registrar-${ruta.rutaId}-${i}"
+                  onclick="enviarParada('${ruta.rutaId}',${i},${ri})"
+                  ${todosCom ? '' : 'disabled'}
+                  style="${todosCom ? '' : 'opacity:0.4;cursor:not-allowed;background:var(--gris-borde);'}">
+                  ${todosCom ? 'Registrar parada' : '🔒 Completa los 4 botones primero'}
+                </button>`;
+              })()
           }` : ''}
         </div>
       </div>`;
@@ -1789,19 +1799,49 @@ function renderConfigClientes() {
 }
 function renderConfig() { renderConfigConductores(); renderConfigClientes(); }
 
+async function marcarIncidenciaGestionada(id) {
+  await sbFetch('incidencias', 'PATCH', {gestionada: true}, `?id=eq.${id}`);
+  incidencias = incidencias.map(i => i.id === id ? {...i, gestionada: true} : i);
+  renderIncidencias();
+  toast('✓ Incidencia marcada como gestionada');
+}
+
 function renderIncidencias() {
-  const cont=document.getElementById('lista-incidencias');
-  if(!incidencias.length){cont.innerHTML=`<div class="empty-state"><div class="empty-icono">✅</div>Sin incidencias.</div>`;return;}
-  cont.innerHTML=[...incidencias].reverse().map(inc=>`
-    <div class="incidencia-card">
+  const cont = document.getElementById('lista-incidencias');
+  const pendientes = incidencias.filter(i => !i.gestionada);
+  const gestionadas = incidencias.filter(i => i.gestionada);
+
+  if (!incidencias.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icono">✅</div>Sin incidencias.</div>`;
+    return;
+  }
+
+  const renderCard = (inc, esGestionada) => `
+    <div class="incidencia-card" style="${esGestionada ? 'opacity:0.5;' : ''}">
       <div class="incidencia-header">
         <div class="avatar" style="width:30px;height:30px;font-size:12px">${inc.conductor.charAt(0)}</div>
-        <div><div class="incidencia-conductor">${inc.conductor}</div><div style="font-size:11px;color:var(--blanco-suave)">${inc.nombreRuta||''} — ${inc.cliente}</div></div>
-        <div class="incidencia-hora-txt">${inc.fecha} ${inc.hora}</div>
+        <div style="flex:1">
+          <div class="incidencia-conductor">${inc.conductor}</div>
+          <div style="font-size:11px;color:var(--blanco-suave)">${inc.nombreRuta||''} — ${inc.cliente}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="incidencia-hora-txt">${inc.fecha} ${inc.hora}</div>
+          ${!esGestionada ? `<button onclick="marcarIncidenciaGestionada('${inc.id}')"
+            style="background:rgba(34,197,94,.15);border:1px solid var(--verde);color:var(--verde);
+            border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;
+            font-family:Inter,sans-serif;white-space:nowrap;">✓ Gestionar</button>` :
+            `<span style="font-size:11px;color:var(--verde);font-weight:700;">✓ Gestionada</span>`}
+        </div>
       </div>
       <div class="incidencia-texto">${inc.texto}</div>
-      ${inc.foto?`<img src="${inc.foto}" class="incidencia-foto">`:''}
-    </div>`).join('');
+      ${inc.foto ? `<img src="${inc.foto}" class="incidencia-foto">` : ''}
+    </div>`;
+
+  cont.innerHTML =
+    (pendientes.length ? `<div style="font-size:11px;font-weight:700;color:var(--rojo);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">⚠️ Pendientes (${pendientes.length})</div>` : '') +
+    [...pendientes].reverse().map(i => renderCard(i, false)).join('') +
+    (gestionadas.length ? `<div style="font-size:11px;font-weight:700;color:var(--verde);letter-spacing:1px;text-transform:uppercase;margin:16px 0 10px;">✓ Gestionadas (${gestionadas.length})</div>` : '') +
+    [...gestionadas].reverse().map(i => renderCard(i, true)).join('');
 }
 
 // ══════════════════════════════════════════
