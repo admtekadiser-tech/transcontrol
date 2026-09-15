@@ -709,6 +709,46 @@ function comprimirImagen(base64, maxWidth, calidad, callback) {
   img.src = base64;
 }
 
+function abrirPDF(key, nombre) {
+  const base64 = (window.PDF_STORE || {})[key] || '';
+  if (!base64) { toast('PDF no disponible', 'err'); return; }
+  try {
+    const arr = base64.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while(n--) u8arr[n] = bstr.charCodeAt(n);
+    const blob = new Blob([u8arr], {type: mime});
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  } catch(e) {
+    toast('⚠️ Error al abrir el PDF', 'err');
+  }
+}
+
+function descargarPDF(key, nombre) {
+  const base64 = (window.PDF_STORE || {})[key] || '';
+  if (!base64) { toast('PDF no disponible', 'err'); return; }
+  try {
+    const arr = base64.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while(n--) u8arr[n] = bstr.charCodeAt(n);
+    const blob = new Blob([u8arr], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombre || 'cita.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    toast('⚠️ Error al descargar el PDF', 'err');
+  }
+}
+
 function guardarFotoPendiente(rutaId, pi, tipo, base64) {
   const clave = rutaId + '-' + pi + '-' + tipo;
   if (base64 && base64.length > 100) {
@@ -769,7 +809,7 @@ async function cargarTodo(mostrarLoading) {
       diaAviso: r.dia_aviso || 'mismo',
       observaciones: r.observaciones || '',
       pdfNombre: r.pdf_nombre || '',
-      pdfData: r.pdf_data || '',
+      pdfData: r.pdf_data ? 'data:ok' : '',
       paradas: typeof r.paradas === 'string' ? JSON.parse(r.paradas) : (r.paradas || [])
     }));
 
@@ -1018,8 +1058,8 @@ function renderConductor(nombre) {
         <div class="pdf-card-icono">📄</div>
         <div class="pdf-card-info"><div class="pdf-card-titulo">Cita de descarga</div><div class="pdf-card-nombre">${ruta.pdfNombre}</div></div>
         ${ruta.pdfData ? `
-          <a class="btn-descargar-pdf" href="${ruta.pdfData}" target="_blank" download="${ruta.pdfNombre}">⬇ Descargar</a>
-          <a class="btn-descargar-pdf" style="margin-left:6px;background:var(--azul)" href="${ruta.pdfData}" target="_blank">👁 Ver</a>
+          <button class="btn-descargar-pdf" onclick="descargarPDF('${ruta.rutaId}_pdf', '${ruta.pdfNombre}')">⬇ Descargar</button>
+          <button class="btn-descargar-pdf" style="margin-left:6px;background:var(--azul)" onclick="abrirPDF('${ruta.rutaId}_pdf', '${ruta.pdfNombre}')">👁 Ver</button>
         ` : '<span style="font-size:11px;color:var(--blanco-suave)">PDF no disponible</span>'}
       </div>` : '';
 
