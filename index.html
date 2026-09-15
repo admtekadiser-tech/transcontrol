@@ -724,21 +724,25 @@ function cerrarModalPDF() {
 }
 
 async function abrirPDF(rutaId, nombre) {
-  toast('⏳ Cargando PDF...');
+  toast('Buscando PDF: ' + rutaId.substring(0,10) + '...');
   let base64 = (window.PDF_STORE || {})[rutaId + '_pdf'] || '';
   if (!base64 || base64 === 'data:ok') {
+    toast('Cargando desde Supabase...');
     try {
       const data = await sbFetch('rutas_activas', 'GET', null, '?ruta_id=eq.' + encodeURIComponent(rutaId) + '&select=pdf_data');
       if (data && data[0] && data[0].pdf_data && data[0].pdf_data.startsWith('data:')) {
         base64 = data[0].pdf_data;
         window.PDF_STORE = window.PDF_STORE || {};
         window.PDF_STORE[rutaId + '_pdf'] = base64;
+        toast('PDF encontrado (' + Math.round(base64.length/1024) + 'KB)');
+      } else {
+        toast('Supabase devolvio: ' + JSON.stringify(data).substring(0,50), 'err');
+        return;
       }
-    } catch(e) {}
-  }
-  if (!base64 || !base64.startsWith('data:')) {
-    toast('PDF no disponible', 'err');
-    return;
+    } catch(e) {
+      toast('Error Supabase: ' + e.message, 'err');
+      return;
+    }
   }
   try {
     const arr = base64.split(',');
