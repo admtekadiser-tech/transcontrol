@@ -1674,6 +1674,11 @@ async function crearRuta() {
     pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
   };
   rutasActivas.push(ruta);
+  // Guardar PDF en memoria para poder abrirlo sin recargar
+  if (pdfAdminData && pdfAdminData.startsWith('data:')) {
+    window.PDF_STORE = window.PDF_STORE || {};
+    window.PDF_STORE[ruta.rutaId + '_pdf'] = pdfAdminData;
+  }
   const guardadoOk = await guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
   toast(`✓ Ruta "${nombreRuta}" asignada a ${conductor} para el ${ruta.fechaServicio}`);
