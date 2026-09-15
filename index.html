@@ -710,11 +710,12 @@ function comprimirImagen(base64, maxWidth, calidad, callback) {
 }
 
 async function abrirPDF(key, nombre) {
+  // Abrir ventana ANTES del async para que Safari no la bloquee
+  const ventana = window.open('', '_blank');
   let base64 = (window.PDF_STORE || {})[key] || '';
   if (!base64) {
-    // Cargar PDF desde Supabase
     const rutaId = key.replace('_pdf', '');
-    toast('⏳ Cargando PDF...');
+    if (ventana) ventana.document.write('<p>Cargando PDF...</p>');
     try {
       const data = await sbFetch('rutas_activas', 'GET', null, '?ruta_id=eq.' + encodeURIComponent(rutaId) + '&select=pdf_data,pdf_nombre');
       if (data && data[0] && data[0].pdf_data && data[0].pdf_data.startsWith('data:')) {
@@ -724,7 +725,11 @@ async function abrirPDF(key, nombre) {
       }
     } catch(e) {}
   }
-  if (!base64 || !base64.startsWith('data:')) { toast('PDF no disponible', 'err'); return; }
+  if (!base64 || !base64.startsWith('data:')) {
+    if (ventana) ventana.close();
+    toast('PDF no disponible', 'err');
+    return;
+  }
   try {
     const arr = base64.split(',');
     const mime = arr[0].match(/:(.*?);/)[1];
@@ -734,8 +739,13 @@ async function abrirPDF(key, nombre) {
     while(n--) u8arr[n] = bstr.charCodeAt(n);
     const blob = new Blob([u8arr], {type: mime});
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    if (ventana) {
+      ventana.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
   } catch(e) {
+    if (ventana) ventana.close();
     toast('⚠️ Error al abrir el PDF', 'err');
   }
 }
