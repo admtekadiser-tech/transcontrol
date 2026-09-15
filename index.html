@@ -486,6 +486,15 @@
   </div>
 </div>
 
+<!-- MODAL PDF -->
+<div class="modal-overlay" id="modal-pdf" style="display:none;z-index:9999;position:fixed;inset:0;background:rgba(0,0,0,.95);flex-direction:column;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--gris-oscuro);">
+    <span id="modal-pdf-nombre" style="color:var(--blanco);font-weight:700;font-size:14px;">PDF</span>
+    <button onclick="cerrarModalPDF()" style="background:var(--rojo);border:none;color:white;border-radius:8px;padding:8px 14px;font-family:Inter,sans-serif;font-weight:700;cursor:pointer;">✕ Cerrar</button>
+  </div>
+  <iframe id="modal-pdf-frame" style="flex:1;width:100%;border:none;" src=""></iframe>
+</div>
+
 <!-- MODAL REASIGNAR -->
 <div class="modal-overlay" id="modal-reasignar">
   <div class="modal">
@@ -709,9 +718,13 @@ function comprimirImagen(base64, maxWidth, calidad, callback) {
   img.src = base64;
 }
 
+function cerrarModalPDF() {
+  document.getElementById('modal-pdf').style.display = 'none';
+  document.getElementById('modal-pdf-frame').src = '';
+}
+
 async function abrirPDF(rutaId, nombre) {
-  const ventana = window.open('', '_blank');
-  if (ventana) ventana.document.write('<p style="font-family:sans-serif;padding:20px">Cargando PDF...</p>');
+  toast('⏳ Cargando PDF...');
   let base64 = (window.PDF_STORE || {})[rutaId + '_pdf'] || '';
   if (!base64 || base64 === 'data:ok') {
     try {
@@ -724,7 +737,6 @@ async function abrirPDF(rutaId, nombre) {
     } catch(e) {}
   }
   if (!base64 || !base64.startsWith('data:')) {
-    if (ventana) ventana.close();
     toast('PDF no disponible', 'err');
     return;
   }
@@ -736,10 +748,18 @@ async function abrirPDF(rutaId, nombre) {
     for(let i=0; i<bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
     const blob = new Blob([u8arr], {type: mime});
     const url = URL.createObjectURL(blob);
-    if (ventana) ventana.location.href = url;
-    else window.open(url, '_blank');
+    // Mostrar en modal inline — funciona en Safari móvil
+    const modal = document.getElementById('modal-pdf');
+    const frame = document.getElementById('modal-pdf-frame');
+    const nombreEl = document.getElementById('modal-pdf-nombre');
+    if (modal && frame) {
+      nombreEl.textContent = nombre || 'Cita de descarga';
+      frame.src = url;
+      modal.style.display = 'flex';
+    } else {
+      window.open(url, '_blank');
+    }
   } catch(e) {
-    if (ventana) ventana.close();
     toast('Error al abrir el PDF', 'err');
   }
 }
