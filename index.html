@@ -709,10 +709,22 @@ function comprimirImagen(base64, maxWidth, calidad, callback) {
   img.src = base64;
 }
 
-function abrirPDF(key, nombre) {
-  console.log('[PDF] Buscando key:', key, '| PDF_STORE keys:', Object.keys(window.PDF_STORE || {}));
-  const base64 = (window.PDF_STORE || {})[key] || '';
-  if (!base64) { toast('PDF no disponible - key: ' + key, 'err'); return; }
+async function abrirPDF(key, nombre) {
+  let base64 = (window.PDF_STORE || {})[key] || '';
+  if (!base64) {
+    // Cargar PDF desde Supabase
+    const rutaId = key.replace('_pdf', '');
+    toast('⏳ Cargando PDF...');
+    try {
+      const data = await sbFetch('rutas_activas', 'GET', null, '?ruta_id=eq.' + encodeURIComponent(rutaId) + '&select=pdf_data,pdf_nombre');
+      if (data && data[0] && data[0].pdf_data && data[0].pdf_data.startsWith('data:')) {
+        base64 = data[0].pdf_data;
+        window.PDF_STORE = window.PDF_STORE || {};
+        window.PDF_STORE[key] = base64;
+      }
+    } catch(e) {}
+  }
+  if (!base64 || !base64.startsWith('data:')) { toast('PDF no disponible', 'err'); return; }
   try {
     const arr = base64.split(',');
     const mime = arr[0].match(/:(.*?);/)[1];
@@ -728,9 +740,21 @@ function abrirPDF(key, nombre) {
   }
 }
 
-function descargarPDF(key, nombre) {
-  const base64 = (window.PDF_STORE || {})[key] || '';
-  if (!base64) { toast('PDF no disponible', 'err'); return; }
+async function descargarPDF(key, nombre) {
+  let base64 = (window.PDF_STORE || {})[key] || '';
+  if (!base64) {
+    const rutaId = key.replace('_pdf', '');
+    toast('⏳ Cargando PDF...');
+    try {
+      const data = await sbFetch('rutas_activas', 'GET', null, '?ruta_id=eq.' + encodeURIComponent(rutaId) + '&select=pdf_data,pdf_nombre');
+      if (data && data[0] && data[0].pdf_data && data[0].pdf_data.startsWith('data:')) {
+        base64 = data[0].pdf_data;
+        window.PDF_STORE = window.PDF_STORE || {};
+        window.PDF_STORE[key] = base64;
+      }
+    } catch(e) {}
+  }
+  if (!base64 || !base64.startsWith('data:')) { toast('PDF no disponible', 'err'); return; }
   try {
     const arr = base64.split(',');
     const mime = arr[0].match(/:(.*?);/)[1];
