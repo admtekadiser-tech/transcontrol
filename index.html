@@ -710,8 +710,9 @@ function comprimirImagen(base64, maxWidth, calidad, callback) {
 }
 
 function abrirPDF(key, nombre) {
+  console.log('[PDF] Buscando key:', key, '| PDF_STORE keys:', Object.keys(window.PDF_STORE || {}));
   const base64 = (window.PDF_STORE || {})[key] || '';
-  if (!base64) { toast('PDF no disponible', 'err'); return; }
+  if (!base64) { toast('PDF no disponible - key: ' + key, 'err'); return; }
   try {
     const arr = base64.split(',');
     const mime = arr[0].match(/:(.*?);/)[1];
