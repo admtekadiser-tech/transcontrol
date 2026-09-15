@@ -834,7 +834,7 @@ async function cargarTodo(mostrarLoading) {
       diaAviso: r.dia_aviso || 'mismo',
       observaciones: r.observaciones || '',
       pdfNombre: r.pdf_nombre || '',
-      pdfData: r.pdf_data ? 'data:ok' : '',
+      pdfData: r.pdf_data || '',
       paradas: typeof r.paradas === 'string' ? JSON.parse(r.paradas) : (r.paradas || [])
     }));
 
@@ -1451,7 +1451,7 @@ async function guardarRutaSheets(ruta) {
     dia_aviso: ruta.diaAviso||'mismo',
     observaciones: ruta.observaciones||'',
     pdf_nombre: ruta.pdfNombre||'',
-    pdf_data: ruta.pdfData||'',
+    pdf_data: (ruta.pdfData && ruta.pdfData !== 'data:ok') ? ruta.pdfData : ((window.PDF_STORE||{})[ruta.rutaId+'_pdf']||''),
     paradas: paradasLimpias
   };
   // Verificar si la ruta ya existe en Supabase
