@@ -961,6 +961,8 @@ function validarPin() {
 
 async function entrar(val) {
   usuarioActual = val;
+  // Guardar sesión para no tener que volver a hacer login
+  try { localStorage.setItem('tc_usuario', val); } catch(e) {}
   document.getElementById('pantalla-login').style.display='none';
   document.getElementById('paso-pin').style.display='none';
   document.getElementById('paso-seleccion').style.display='block';
@@ -980,7 +982,8 @@ async function entrar(val) {
 }
 
 function salir() {
-  usuarioActual = null; pinActual=''; pinUsuarioSeleccionado='';
+  usuarioActual = null;
+  try { localStorage.removeItem('tc_usuario'); } catch(e) {} pinActual=''; pinUsuarioSeleccionado='';
   document.getElementById('pantalla-login').style.display='flex';
   document.getElementById('paso-seleccion').style.display='block';
   document.getElementById('paso-pin').style.display='none';
@@ -1954,7 +1957,26 @@ function toast(msg,tipo){
 // ══════════════════════════════════════════
 document.getElementById('fecha-login').textContent = fechaActual();
 inicializarEmailJS();
-cargarTodo(true);
+
+// Recuperar sesión guardada
+try {
+  const sesionGuardada = localStorage.getItem('tc_usuario');
+  if (sesionGuardada && sesionGuardada !== 'null') {
+    cargarTodo(true).then(() => {
+      // Verificar que el usuario sigue siendo válido
+      if (sesionGuardada === 'admin' || PINES[sesionGuardada]) {
+        entrar(sesionGuardada);
+      } else {
+        localStorage.removeItem('tc_usuario');
+        cargarTodo(false);
+      }
+    });
+  } else {
+    cargarTodo(true);
+  }
+} catch(e) {
+  cargarTodo(true);
+}
 </script>
 </body>
 </html>
