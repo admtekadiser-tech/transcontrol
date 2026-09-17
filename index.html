@@ -11,6 +11,8 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { overflow-x: hidden; }
+  input, textarea, select, button { max-width: 100%; }
   :root {
     --negro: #0f1117; --gris-oscuro: #1a1d27; --gris-medio: #252836;
     --gris-borde: #2e3144; --blanco: #f0f2f8; --blanco-suave: #a8adc4;
@@ -23,7 +25,7 @@
   .logo-login { font-size:13px; font-weight:700; letter-spacing:4px; color:var(--azul); text-transform:uppercase; margin-bottom:8px; }
   .titulo-login { font-size:28px; font-weight:800; margin-bottom:6px; text-align:center; }
   .fecha-login { font-size:14px; color:var(--blanco-suave); margin-bottom:30px; text-align:center; }
-  .card-login { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:16px; padding:32px 28px; width:100%; max-width:360px; }
+  .card-login { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:16px; padding:32px 28px; width:100%; max-width:100%;max-width:360px; }
   .label { font-size:12px; font-weight:600; color:var(--blanco-suave); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; display:block; }
   select, input[type="text"], input[type="time"], input[type="date"], textarea {
     width:100%; background:var(--gris-medio); border:1px solid var(--gris-borde);
@@ -91,7 +93,7 @@
   .dir-completa-texto { font-size:12px; color:var(--blanco); line-height:1.5; }
   .btn-maps { display:inline-block; margin-top:6px; font-size:11px; font-weight:700; color:var(--azul); text-decoration:none; background:rgba(59,130,246,.12); padding:4px 10px; border-radius:6px; }
 
-  .botones-registro { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:11px; }
+  .botones-registro { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:11px; min-width:0; }
   .btn-registro { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:10px; padding:11px 8px; text-align:center; cursor:pointer; transition:all .2s; font-family:'Inter',sans-serif; }
   .btn-registro:active { transform:scale(.95); }
   .btn-registro .icono { font-size:18px; margin-bottom:3px; }
@@ -125,7 +127,7 @@
   .tab-contenido { display:none; padding:20px; }
   .tab-contenido.activo { display:block; }
 
-  .resumen-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px; }
+  .resumen-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(80px,1fr)); gap:8px; margin-bottom:18px; }
   .stat-card { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:12px; padding:12px; text-align:center; }
   .stat-numero { font-size:24px; font-weight:800; }
   .stat-label { font-size:10px; color:var(--blanco-suave); margin-top:2px; }
@@ -154,7 +156,7 @@
   .incidencia-tag { font-size:10px; background:rgba(239,68,68,.12); color:var(--rojo); padding:2px 6px; border-radius:4px; font-weight:600; display:inline-block; margin-top:3px; }
 
   .tabla-wrap { overflow-x:auto; }
-  .tabla-registro { width:100%; border-collapse:collapse; font-size:12px; min-width:700px; }
+  .tabla-registro { width:100%; border-collapse:collapse; font-size:12px; min-width:100%;max-width:700px; }
   .tabla-registro th { text-align:left; padding:9px 10px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--blanco-suave); border-bottom:1px solid var(--gris-borde); }
   .tabla-registro td { padding:9px 10px; border-bottom:1px solid var(--gris-borde); vertical-align:top; }
   .hora-celda { font-weight:700; color:var(--azul); }
@@ -164,7 +166,7 @@
   .form-ruta h3 { font-size:14px; font-weight:700; margin-bottom:14px; }
   .campo-grupo { margin-bottom:12px; }
   .campo-grupo label { font-size:11px; font-weight:600; color:var(--blanco-suave); letter-spacing:1px; text-transform:uppercase; display:block; margin-bottom:6px; }
-  .fila-2col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .fila-2col { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
 
   .upload-pdf { background:var(--gris-medio); border:2px dashed rgba(139,92,246,.4); border-radius:10px; padding:14px; text-align:center; cursor:pointer; }
   .upload-pdf input { display:none; }
@@ -241,7 +243,7 @@
 
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:100; display:none; align-items:center; justify-content:center; padding:20px; }
   .modal-overlay.activo { display:flex; }
-  .modal { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:16px; padding:24px; width:100%; max-width:360px; }
+  .modal { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:16px; padding:24px; width:100%; max-width:100%;max-width:360px; }
   .modal-titulo { font-size:16px; font-weight:800; margin-bottom:6px; }
   .modal-subtitulo { font-size:13px; color:var(--blanco-suave); margin-bottom:18px; line-height:1.5; }
   .modal-btns { display:flex; gap:10px; margin-top:16px; }
@@ -262,9 +264,20 @@
   .pin-label-usuario { font-size:15px; font-weight:700; text-align:center; margin-bottom:4px; }
   .pin-label-sub { font-size:12px; color:var(--blanco-suave); text-align:center; margin-bottom:16px; }
 
-  @media(min-width:600px) {
+  @media(min-width:100%;max-width:600px) {
     .botones-registro { grid-template-columns:repeat(4,1fr); }
     .resumen-stats { grid-template-columns:repeat(6,1fr); }
+  }
+
+  @media (max-width: 480px) {
+    .fila-2col { grid-template-columns: 1fr !important; }
+    .ruta-grupo-meta { flex-direction: column; gap: 4px; }
+    .tabs .tab { font-size: 11px; padding: 10px 8px; }
+    .btn-descargar-pdf { font-size: 10px; padding: 6px 10px; }
+    .conductor-badges { margin-left: auto; }
+    .parada-estado-badge { font-size: 10px; }
+    .admin-topbar { flex-wrap: wrap; gap: 8px; }
+    .ruta-nombre-tag, .ruta-fecha-tag, .ruta-hora-tag { font-size: 10px; }
   }
 </style>
 </head>
@@ -1109,8 +1122,10 @@ function renderConductor(nombre) {
         <div class="pdf-card-icono">📄</div>
         <div class="pdf-card-info"><div class="pdf-card-titulo">Cita de descarga</div><div class="pdf-card-nombre">${ruta.pdfNombre}</div></div>
         ${ruta.pdfData ? `
-          <button class="btn-descargar-pdf" onclick="descargarPDF('${ruta.rutaId}', '${ruta.pdfNombre}')">⬇ Descargar</button>
-          <button class="btn-descargar-pdf" style="margin-left:6px;background:var(--azul)" onclick="abrirPDF('${ruta.rutaId}', '${ruta.pdfNombre}')">👁 Ver</button>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+            <button class="btn-descargar-pdf" onclick="descargarPDF('${ruta.rutaId}', '${ruta.pdfNombre}')">⬇ Descargar</button>
+            <button class="btn-descargar-pdf" style="background:var(--azul)" onclick="abrirPDF('${ruta.rutaId}', '${ruta.pdfNombre}')">👁 Ver</button>
+          </div>
         ` : '<span style="font-size:11px;color:var(--blanco-suave)">PDF no disponible</span>'}
       </div>` : '';
 
@@ -1187,7 +1202,7 @@ function renderConductor(nombre) {
 
           <div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:12px 14px;margin-bottom:10px;">
             <div style="font-size:11px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">📦 Control de palets</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;min-width:0;">
               <div>
                 <label style="font-size:10px;font-weight:600;color:var(--blanco-suave);display:block;margin-bottom:4px;">PALETS ENTREGADOS</label>
                 <input type="number" min="0" id="palets-entregados-${ri}-${i}"
