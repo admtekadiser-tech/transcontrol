@@ -702,6 +702,7 @@ let incidencias = [];
 let pdfAdminData = null, pdfAdminNombre = '';
 let rutaAEliminar = null;
 let conductorAReasignar = null;
+let rutaEnEdicion = null;
 
 // Almacén global de fotos — se llena en el momento de seleccionar, antes de que Safari las descarte
 const FOTOS_PENDIENTES = {};  // clave: "rutaId-pi-tipo" → base64
@@ -1707,6 +1708,14 @@ function crearParadaObj(cliente, direccion) {
 async function crearRuta() {
   const conductor = document.getElementById('admin-select-conductor').value;
   if (!conductor){toast('Selecciona un conductor','err');return;}
+  
+  // Si estamos editando, eliminar la ruta antigua primero
+  if (rutaEnEdicion) {
+    rutasActivas = rutasActivas.filter(r => r.rutaId !== rutaEnEdicion);
+    await sbFetch('rutas_activas', 'DELETE', null, `?ruta_id=eq.${encodeURIComponent(rutaEnEdicion)}`);
+    rutaEnEdicion = null;
+    cancelarEdicion();
+  }
   const fechaServicioInput = document.getElementById('admin-fecha-servicio').value;
   if (!fechaServicioInput){toast('Selecciona la fecha del servicio','err');return;}
   const nombreRuta = document.getElementById('admin-nombre-ruta').value.trim();
@@ -1748,7 +1757,8 @@ async function crearRuta() {
   const guardadoOk = await guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
   toast(`✓ Ruta "${nombreRuta}" asignada a ${conductor} para el ${ruta.fechaServicio}`);
-  document.getElementById('admin-select-conductor').value='';
+  // Mantener conductor seleccionado para asignar otra ruta rápidamente
+  // document.getElementById('admin-select-conductor').value='';  // NO resetear conductor
   document.getElementById('admin-nombre-ruta').value='';
   document.getElementById('admin-hora-inicio').value='';
   document.getElementById('admin-hora-aviso').value='';
@@ -1774,6 +1784,7 @@ function renderRutasCreadas() {
         ${ruta.horaInicio?`<span class="ruta-hora-tag">🕐 ${ruta.horaInicio}</span>`:''}
         ${ruta.horaAviso?`<span style="font-size:11px;font-weight:700;background:rgba(249,115,22,.15);color:var(--naranja);padding:3px 8px;border-radius:6px;">🔔 Aviso: ${ruta.horaAviso}${ruta.diaAviso==='anterior'?' (día ant.)':''}</span>`:''}
         ${ruta.pdfNombre?`<span class="ruta-conductor-tag">📄 PDF</span>`:''}
+        <button class="btn-reasignar" style="background:rgba(59,130,246,.15);border-color:var(--azul);color:var(--azul);" onclick="editarRuta('${ruta.rutaId}')">✏️ Editar</button>
         <button class="btn-reasignar" onclick="abrirModalReasignar('${ruta.rutaId}')">🔄 Reasignar</button>
         <button class="btn-eliminar-ruta" onclick="abrirModalEliminarRuta('${ruta.rutaId}')">✕ Eliminar</button>
       </div>
@@ -1795,6 +1806,67 @@ async function confirmarEliminarRuta() {
   cerrarModalEliminarRuta();
   renderRutasCreadas(); renderTiempoReal();
   toast('✓ Ruta eliminada');
+}
+
+function editarRuta(rutaId) {
+  const ruta = rutasActivas.find(r => r.rutaId === rutaId);
+  if (!ruta) return;
+  rutaEnEdicion = rutaId;
+
+  // Rellenar formulario con datos de la ruta
+  document.getElementById('admin-select-conductor').value = ruta.conductor;
+  document.getElementById('admin-nombre-ruta').value = ruta.nombreRuta || '';
+  document.getElementById('admin-hora-inicio').value = ruta.horaInicio || '';
+  document.getElementById('admin-hora-aviso').value = ruta.horaAviso || '';
+  document.getElementById('admin-dia-aviso').value = ruta.diaAviso || 'mismo';
+  document.getElementById('admin-observaciones').value = ruta.observaciones || '';
+
+  // Rellenar fecha
+  if (ruta.fechaServicio) {
+    const partes = ruta.fechaServicio.split('/');
+    if (partes.length === 3) {
+      document.getElementById('admin-fecha-servicio').value = `${partes[2]}-${partes[1]}-${partes[0]}`;
+    }
+  }
+
+  // Rellenar paradas
+  initParadas();
+  paradaCount = 0;
+  document.getElementById('inputs-paradas').innerHTML = '';
+  ruta.paradas.forEach((p, idx) => {
+    paradaCount++;
+    document.getElementById('inputs-paradas').insertAdjacentHTML('beforeend', nuevaParadaHTML(paradaCount));
+    // Seleccionar modo manual y rellenar
+    const num = paradaCount;
+    setTimeout(() => {
+      const modoManualBtn = document.querySelector(`#pb-${num} .parada-tab:last-child`);
+      if (modoManualBtn) cambiarModoParada(num, 'manual', modoManualBtn);
+      const inputNombre = document.getElementById(`manual-nombre-${num}`);
+      const inputDir = document.getElementById(`manual-dir-${num}`);
+      if (inputNombre) inputNombre.value = p.cliente || '';
+      if (inputDir) inputDir.value = p.direccion || '';
+    }, 50);
+  });
+
+  // Cambiar botón a "Guardar cambios"
+  const btnAsignar = document.querySelector('[onclick="crearRuta()"]');
+  if (btnAsignar) {
+    btnAsignar.textContent = '💾 Guardar cambios';
+    btnAsignar.style.background = 'var(--verde)';
+  }
+
+  // Scroll al formulario
+  document.getElementById('admin-select-conductor').scrollIntoView({behavior:'smooth'});
+  toast('✏️ Editando ruta — modifica y pulsa Guardar cambios');
+}
+
+function cancelarEdicion() {
+  rutaEnEdicion = null;
+  const btnAsignar = document.querySelector('[onclick="crearRuta()"]');
+  if (btnAsignar) {
+    btnAsignar.textContent = 'Asignar ruta al conductor';
+    btnAsignar.style.background = '';
+  }
 }
 
 function abrirModalReasignar(rutaId) {
