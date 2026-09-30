@@ -1488,16 +1488,29 @@ function añadirFotos(rutaId, pi, tipo, input, ri) {
 function actualizarListaFotos(rutaId, pi, tipo, ri) {
   const clave = rutaId + '-' + pi + '-' + tipo;
   const fotos = FOTOS_MULTI[clave] || [];
-  const listaId = tipo === 'inc' ? `lista-fotos-inc-${ri}-${pi}` : `lista-fotos-alb-${ri}-${pi}`;
-  const lista = document.getElementById(listaId);
-  if (!lista) return;
-  lista.innerHTML = fotos.map((f, fi) => `
+  // Buscar el elemento por data attribute en lugar de ID con ri
+  const listas = document.querySelectorAll('[data-fotos-key="' + clave + '"]');
+  const lista = listas.length > 0 ? listas[0] : document.getElementById((tipo==='inc'?'lista-fotos-inc-':'lista-fotos-alb-') + ri + '-' + pi);
+  if (!lista) {
+    // Buscar por cualquier lista que contenga el rutaId y pi
+    const todas = document.querySelectorAll('[id^="lista-fotos-' + tipo + '-"]');
+    const encontrada = Array.from(todas).find(el => el.id.endsWith('-' + pi));
+    if (!encontrada) return;
+    encontrada.innerHTML = renderListaFotos(fotos, rutaId, pi, tipo, ri);
+    return;
+  }
+  lista.innerHTML = renderListaFotos(fotos, rutaId, pi, tipo, ri);
+}
+
+function renderListaFotos(fotos, rutaId, pi, tipo, ri) {
+  if (!fotos.length) return '';
+  return fotos.map((f, fi) => `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gris-borde);">
       <span style="font-size:20px;">📎</span>
       <span style="color:var(--blanco);font-size:13px;flex:1;word-break:break-all;">${f.name}</span>
       <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${fi},${ri})"
         style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:18px;padding:4px;">✕</button>
-    </div>`).join('') || '<div style="color:var(--blanco-suave);font-size:12px;padding:4px 0;">Sin fotos añadidas</div>';
+    </div>`).join('');
 }
 
 function quitarFotoMulti(rutaId, pi, tipo, fi, ri) {
