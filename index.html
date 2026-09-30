@@ -688,12 +688,14 @@ async function enviarAlertaDevolucion(conductor, ruta, parada, urlsExtra) {
       importe:      'Verificar',
       observaciones: parada.incidencia || 'Sin texto de incidencia',
       foto_url: (() => {
-        const urls = [...(parada.fotosIncidencia||[]), ...(urlsExtra||[])].filter(u=>u&&!u.startsWith('data:'));
-        // Enviar primera URL como foto_url, resto como mensaje en observaciones
+        // Limpiar URLs — separar por <br>, \n, o espacios y coger solo URLs válidas
+        const limpiar = arr => (arr||[]).flatMap(u => u.split(/\s*<br\s*\/?>\s*|\n/)).map(u=>u.trim()).filter(u=>u.startsWith('http'));
+        const urls = [...limpiar(parada.fotosIncidencia), ...limpiar(urlsExtra)];
         return urls[0] || '';
       })(),
       fotos_extra: (() => {
-        const urls = [...(parada.fotosIncidencia||[]), ...(urlsExtra||[])].filter(u=>u&&!u.startsWith('data:'));
+        const limpiar = arr => (arr||[]).flatMap(u => u.split(/\s*<br\s*\/?>\s*|\n/)).map(u=>u.trim()).filter(u=>u.startsWith('http'));
+        const urls = [...limpiar(parada.fotosIncidencia), ...limpiar(urlsExtra)];
         if (urls.length <= 1) return '';
         return urls.slice(1).map((u,i) => `Foto ${i+2}: ${u}`).join('\n');
       })()
