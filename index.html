@@ -1396,29 +1396,40 @@ async function enviarParada(rutaId, pi, ri) {
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
 
-  // Subir múltiples fotos a Cloudinary
+  // Subir múltiples fotos directamente a Cloudinary (sin FileReader — compatible iOS)
   const fechaCarpeta = (ruta.fechaServicio||'sin-fecha').replace(/\//g,'-');
 
+  async function subirFileCloudinary(file, carpeta) {
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', CLOUDINARY_PRESET);
+      fd.append('folder', carpeta);
+      const r = await fetch('https://api.cloudinary.com/v1_1/'+CLOUDINARY_CLOUD+'/image/upload', {method:'POST',body:fd});
+      const d = await r.json();
+      return d.secure_url || '';
+    } catch(e) { return ''; }
+  }
+
   // Fotos albarán
-  const fotosAlb = (FOTOS_MULTI[rutaId+'-'+pi+'-alb'] || []);
+  const fotosAlb = FOTOS_MULTI[rutaId+'-'+pi+'-alb'] || [];
   const urlsAlb = [];
-  for (const f of fotosAlb) {
-    const url = await subirFotoCloudinary(f.base64, 'Albaranes_TransControl/'+usuarioActual+'/'+fechaCarpeta, 'alb_'+Date.now());
+  for (const file of fotosAlb) {
+    toast('⏳ Subiendo foto albarán...');
+    const url = await subirFileCloudinary(file, 'Albaranes_TransControl/'+usuarioActual+'/'+fechaCarpeta);
     if (url) { urlsAlb.push(url); await sbFetch('fotos','POST',{fecha:ruta.fechaServicio,conductor:usuarioActual,ruta_id:rutaId,cliente:p.cliente,tipo:'albaran',url}); }
   }
-  if (urlsAlb.length) p.fotos = [...(p.fotos||[]), ...urlsAlb];
-  // Compatibilidad con campo antiguo
-  if (urlsAlb.length) p.foto = urlsAlb[0];
+  if (urlsAlb.length) { p.fotos = [...(p.fotos||[]), ...urlsAlb]; p.foto = urlsAlb[0]; }
 
   // Fotos incidencia
-  const fotosInc = (FOTOS_MULTI[rutaId+'-'+pi+'-inc'] || []);
+  const fotosInc = FOTOS_MULTI[rutaId+'-'+pi+'-inc'] || [];
   const urlsInc = [];
-  for (const f of fotosInc) {
-    const url = await subirFotoCloudinary(f.base64, 'Incidencias_TransControl/'+usuarioActual+'/'+fechaCarpeta, 'inc_'+Date.now());
+  for (const file of fotosInc) {
+    toast('⏳ Subiendo foto incidencia...');
+    const url = await subirFileCloudinary(file, 'Incidencias_TransControl/'+usuarioActual+'/'+fechaCarpeta);
     if (url) { urlsInc.push(url); await sbFetch('fotos','POST',{fecha:ruta.fechaServicio,conductor:usuarioActual,ruta_id:rutaId,cliente:p.cliente,tipo:'incidencia',url}); }
   }
-  if (urlsInc.length) p.fotosIncidencia = [...(p.fotosIncidencia||[]), ...urlsInc];
-  if (urlsInc.length) p.fotoIncidencia = urlsInc[0];
+  if (urlsInc.length) { p.fotosIncidencia = [...(p.fotosIncidencia||[]), ...urlsInc]; p.fotoIncidencia = urlsInc[0]; }
 
   // Limpiar almacén
   delete FOTOS_MULTI[rutaId+'-'+pi+'-alb'];
@@ -1453,65 +1464,47 @@ function toggleParada(ri, pi) {
   document.getElementById(`chev-${ri}-${pi}`).classList.toggle('girado');
 }
 
-// Almacén de fotos pendientes múltiples
-const FOTOS_MULTI = {}; // clave: "rutaId-pi-tipo" → [{base64, nombre}]
+// Almacén de fotos pendientes múltiples — guardamos los File objects directamente
+const FOTOS_MULTI = {}; // clave: "rutaId-pi-tipo" → [File]
 
 function añadirFotos(rutaId, pi, tipo, input) {
   if (!input.files || !input.files.length) return;
   const clave = rutaId + '-' + pi + '-' + tipo;
   FOTOS_MULTI[clave] = FOTOS_MULTI[clave] || [];
 
-  // Encontrar el ri para actualizar la lista visual
+  const archivos = Array.from(input.files);
+  archivos.forEach(file => FOTOS_MULTI[clave].push(file));
+
+  // Actualizar lista visual
   const rutas = rutasDelConductorVisibles(usuarioActual);
   const ri = rutas.findIndex(r => r.rutaId === rutaId);
+  actualizarListaFotos(rutaId, pi, tipo, ri);
+  toast(`✓ ${FOTOS_MULTI[clave].length} foto(s) seleccionada(s)`);
+  input.value = '';
+}
 
-  const archivos = Array.from(input.files);
-  let procesadas = 0;
-
-  archivos.forEach(file => {
-    const r = new FileReader();
-    r.onload = e => {
-      comprimirImagen(e.target.result, base64 => {
-        FOTOS_MULTI[clave].push({base64, nombre: file.name});
-        procesadas++;
-        // Actualizar lista visual
-        const listaId = tipo === 'inc' ? `lista-fotos-inc-${ri}-${pi}` : `lista-fotos-alb-${ri}-${pi}`;
-        const lista = document.getElementById(listaId);
-        if (lista) {
-          lista.innerHTML = FOTOS_MULTI[clave].map((f, fi) => `
-            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gris-borde);">
-              <span style="font-size:18px;">📎</span>
-              <span style="color:var(--blanco);font-size:13px;flex:1;">${f.nombre} <span style="color:var(--verde);">✓</span></span>
-              <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${fi})" 
-                style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:16px;">✕</button>
-            </div>`).join('');
-        }
-        if (procesadas === archivos.length) toast(`✓ ${procesadas} foto(s) añadida(s)`);
-      });
-    };
-    r.readAsDataURL(file);
-  });
-  input.value = ''; // Reset para poder añadir más
+function actualizarListaFotos(rutaId, pi, tipo, ri) {
+  const clave = rutaId + '-' + pi + '-' + tipo;
+  const fotos = FOTOS_MULTI[clave] || [];
+  const listaId = tipo === 'inc' ? `lista-fotos-inc-${ri}-${pi}` : `lista-fotos-alb-${ri}-${pi}`;
+  const lista = document.getElementById(listaId);
+  if (!lista) return;
+  lista.innerHTML = fotos.map((f, fi) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gris-borde);">
+      <span style="font-size:20px;">📎</span>
+      <span style="color:var(--blanco);font-size:13px;flex:1;word-break:break-all;">${f.name}</span>
+      <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${fi})"
+        style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:18px;padding:4px;">✕</button>
+    </div>`).join('') || '<div style="color:var(--blanco-suave);font-size:12px;padding:4px 0;">Sin fotos añadidas</div>';
 }
 
 function quitarFotoMulti(rutaId, pi, tipo, fi) {
   const clave = rutaId + '-' + pi + '-' + tipo;
   if (FOTOS_MULTI[clave]) {
     FOTOS_MULTI[clave].splice(fi, 1);
-    // Re-renderizar lista
     const rutas = rutasDelConductorVisibles(usuarioActual);
     const ri = rutas.findIndex(r => r.rutaId === rutaId);
-    const listaId = tipo === 'inc' ? `lista-fotos-inc-${ri}-${pi}` : `lista-fotos-alb-${ri}-${pi}`;
-    const lista = document.getElementById(listaId);
-    if (lista) {
-      lista.innerHTML = FOTOS_MULTI[clave].map((f, idx) => `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gris-borde);">
-          <span style="font-size:18px;">📎</span>
-          <span style="color:var(--blanco);font-size:13px;flex:1;">${f.nombre} <span style="color:var(--verde);">✓</span></span>
-          <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${idx})" 
-            style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:16px;">✕</button>
-        </div>`).join('');
-    }
+    actualizarListaFotos(rutaId, pi, tipo, ri);
   }
 }
 
