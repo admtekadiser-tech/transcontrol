@@ -687,7 +687,16 @@ async function enviarAlertaDevolucion(conductor, ruta, parada, urlsExtra) {
       franjas:      '—',
       importe:      'Verificar',
       observaciones: parada.incidencia || 'Sin texto de incidencia',
-      foto_url: [...(parada.fotosIncidencia||[]), ...(urlsExtra||[])].filter(u=>u&&!u.startsWith('data:')).join('\n') || ''
+      foto_url: (() => {
+        const urls = [...(parada.fotosIncidencia||[]), ...(urlsExtra||[])].filter(u=>u&&!u.startsWith('data:'));
+        // Enviar primera URL como foto_url, resto como mensaje en observaciones
+        return urls[0] || '';
+      })(),
+      fotos_extra: (() => {
+        const urls = [...(parada.fotosIncidencia||[]), ...(urlsExtra||[])].filter(u=>u&&!u.startsWith('data:'));
+        if (urls.length <= 1) return '';
+        return urls.slice(1).map((u,i) => `Foto ${i+2}: ${u}`).join('\n');
+      })()
     });
     console.log('[EMAIL] Alerta devolución enviada:', parada.cliente);
   } catch(err) {
@@ -1846,11 +1855,6 @@ async function crearRuta() {
   const conductor = document.getElementById('admin-select-conductor').value;
   if (!conductor){toast('Selecciona un conductor','err');return;}
   
-  // Calcular orden automático — siguiente número disponible para ese conductor y fecha
-  const rutasDelDia = rutasActivas.filter(r => r.conductor === conductor && r.fechaServicio === fechaInputAFechaCorta(fechaServicioInput));
-  const maxOrden = rutasDelDia.length > 0 ? Math.max(...rutasDelDia.map(r => r.orden || 0)) : 0;
-  const ordenNuevo = rutaEnEdicion ? (rutasActivas.find(r=>r.rutaId===rutaEnEdicion)?.orden || maxOrden + 10) : maxOrden + 10;
-
   // Si estamos editando, eliminar la ruta antigua primero
   if (rutaEnEdicion) {
     rutasActivas = rutasActivas.filter(r => r.rutaId !== rutaEnEdicion);
@@ -1888,7 +1892,12 @@ async function crearRuta() {
     fechaAsignada: fechaCorta(),
     fechaServicio: fechaInputAFechaCorta(fechaServicioInput),
     conductor, nombreRuta, horaInicio, horaAviso, diaAviso, observaciones,
-    orden: ordenNuevo,
+    orden: (() => {
+      const fechaC = fechaInputAFechaCorta(fechaServicioInput);
+      const rutasDelDia = rutasActivas.filter(r => r.conductor === conductor && r.fechaServicio === fechaC);
+      const max = rutasDelDia.length > 0 ? Math.max(...rutasDelDia.map(r => r.orden || 0)) : 0;
+      return rutaEnEdicion ? (rutasActivas.find(r=>r.rutaId===rutaEnEdicion)?.orden || max + 10) : max + 10;
+    })(),
     pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
   };
   rutasActivas.push(ruta);
