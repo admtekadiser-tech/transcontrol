@@ -915,11 +915,12 @@ async function cargarTodo(mostrarLoading) {
         }))
     }));
 
-    // Ordenar rutas por fecha + orden manual + hora inicio
+    // Ordenar rutas por fecha + orden manual (el orden lo controla admin con ↑↓)
+    const fechaANum = f => { if (!f) return 0; const p = f.split('/'); return parseInt(p[2]+p[1]+p[0])||0; };
     rutasActivas.sort((a, b) => {
-      if (a.fechaServicio !== b.fechaServicio) return a.fechaServicio.localeCompare(b.fechaServicio);
-      if ((a.orden||999) !== (b.orden||999)) return (a.orden||999) - (b.orden||999);
-      return (a.horaInicio || '').localeCompare(b.horaInicio || '');
+      const fd = fechaANum(a.fechaServicio) - fechaANum(b.fechaServicio);
+      if (fd !== 0) return fd;
+      return (a.orden||999) - (b.orden||999);
     });
 
     incidencias = (incidenciasData||[]).map(i => ({
@@ -1606,7 +1607,7 @@ async function guardarRutaSheets(ruta) {
   }));
   const body = {
     ruta_id: ruta.rutaId,
-    orden: ruta.orden || 999,
+    orden: ruta.orden,
     fecha_asignada: ruta.fechaAsignada,
     fecha_servicio: ruta.fechaServicio,
     conductor: ruta.conductor,
@@ -1839,6 +1840,11 @@ async function crearRuta() {
   const conductor = document.getElementById('admin-select-conductor').value;
   if (!conductor){toast('Selecciona un conductor','err');return;}
   
+  // Calcular orden automático — siguiente número disponible para ese conductor y fecha
+  const rutasDelDia = rutasActivas.filter(r => r.conductor === conductor && r.fechaServicio === fechaInputAFechaCorta(fechaServicioInput));
+  const maxOrden = rutasDelDia.length > 0 ? Math.max(...rutasDelDia.map(r => r.orden || 0)) : 0;
+  const ordenNuevo = rutaEnEdicion ? (rutasActivas.find(r=>r.rutaId===rutaEnEdicion)?.orden || maxOrden + 10) : maxOrden + 10;
+
   // Si estamos editando, eliminar la ruta antigua primero
   if (rutaEnEdicion) {
     rutasActivas = rutasActivas.filter(r => r.rutaId !== rutaEnEdicion);
@@ -1876,6 +1882,7 @@ async function crearRuta() {
     fechaAsignada: fechaCorta(),
     fechaServicio: fechaInputAFechaCorta(fechaServicioInput),
     conductor, nombreRuta, horaInicio, horaAviso, diaAviso, observaciones,
+    orden: ordenNuevo,
     pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
   };
   rutasActivas.push(ruta);
@@ -1968,10 +1975,11 @@ async function moverRuta(rutaId, direccion) {
   ]);
   
   // Reordenar en memoria
+  const fechaANum2 = f => { if (!f) return 0; const p = f.split('/'); return parseInt(p[2]+p[1]+p[0])||0; };
   rutasActivas.sort((a, b) => {
-    if (a.fechaServicio !== b.fechaServicio) return a.fechaServicio.localeCompare(b.fechaServicio);
-    if (a.orden !== b.orden) return a.orden - b.orden;
-    return (a.horaInicio || '').localeCompare(b.horaInicio || '');
+    const fd = fechaANum2(a.fechaServicio) - fechaANum2(b.fechaServicio);
+    if (fd !== 0) return fd;
+    return (a.orden||999) - (b.orden||999);
   });
   
   renderRutasCreadas();
