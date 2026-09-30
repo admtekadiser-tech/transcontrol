@@ -668,7 +668,7 @@ async function enviarAlertaEspera(conductor, ruta, parada) {
   }
 }
 
-async function enviarAlertaDevolucion(conductor, ruta, parada) {
+async function enviarAlertaDevolucion(conductor, ruta, parada, urlsExtra) {
   if (typeof emailjs === 'undefined') return;
   // Alerta cuando hay foto de incidencia (devolución)
   if (!parada.fotoIncidencia && !parada.incidencia) return;
@@ -687,9 +687,7 @@ async function enviarAlertaDevolucion(conductor, ruta, parada) {
       franjas:      '—',
       importe:      'Verificar',
       observaciones: parada.incidencia || 'Sin texto de incidencia',
-      foto_url: (parada.fotoIncidencia && !parada.fotoIncidencia.startsWith('data:'))
-        ? parada.fotoIncidencia
-        : ''
+      foto_url: [...(parada.fotosIncidencia||[]), ...(urlsExtra||[])].filter(u=>u&&!u.startsWith('data:')).join('\n') || ''
     });
     console.log('[EMAIL] Alerta devolución enviada:', parada.cliente);
   } catch(err) {
@@ -885,7 +883,7 @@ async function cargarTodo(mostrarLoading) {
     const [conductoresData, clientesData, rutasData, incidenciasData] = await Promise.all([
       sbFetch('conductores', 'GET', null, '?select=nombre,pin&order=nombre'),
       sbFetch('clientes', 'GET', null, '?select=nombre,direccion,devuelve_palets&order=nombre'),
-      sbFetch('rutas_activas', 'GET', null, '?select=*&order=fecha_servicio'),
+      sbFetch('rutas_activas', 'GET', null, '?select=*&order=fecha_servicio.asc,orden.asc,hora_inicio.asc,created_at.asc'),
       sbFetch('incidencias', 'GET', null, '?select=*&order=gestionada.asc,created_at.desc&limit=200')
     ]);
 
@@ -910,8 +908,19 @@ async function cargarTodo(mostrarLoading) {
       observaciones: r.observaciones || '',
       pdfNombre: r.pdf_nombre || '',
       pdfData: r.pdf_data || '',
-      paradas: typeof r.paradas === 'string' ? JSON.parse(r.paradas) : (r.paradas || [])
+      paradas: (typeof r.paradas === 'string' ? JSON.parse(r.paradas) : (r.paradas || [])).map(p => ({
+          ...p,
+          fotos: p.fotos || (p.foto ? [p.foto] : []),
+          fotosIncidencia: p.fotosIncidencia || (p.fotoIncidencia ? [p.fotoIncidencia] : [])
+        }))
     }));
+
+    // Ordenar rutas por fecha + orden manual + hora inicio
+    rutasActivas.sort((a, b) => {
+      if (a.fechaServicio !== b.fechaServicio) return a.fechaServicio.localeCompare(b.fechaServicio);
+      if ((a.orden||999) !== (b.orden||999)) return (a.orden||999) - (b.orden||999);
+      return (a.horaInicio || '').localeCompare(b.horaInicio || '');
+    });
 
     incidencias = (incidenciasData||[]).map(i => ({
       id: i.id,
@@ -1266,14 +1275,19 @@ function renderConductor(nombre) {
             </div>
           </div>
           <div class="fila-accion">
-            <label>📸 Foto de la incidencia (opcional)</label>
+            <label>📸 Fotos de la incidencia (opcional)</label>
             <div class="input-foto" onclick="document.getElementById('foto-inc-${ri}-${i}').click()">
-              <input type="file" id="foto-inc-${ri}-${i}" accept="image/*" capture="environment" onchange="prevFotoInc('${ruta.rutaId}',${i},this)">
+              <input type="file" id="foto-inc-${ri}-${i}" accept="image/*" multiple onchange="añadirFotos('${ruta.rutaId}',${i},'inc',this)">
               <div class="icono-foto">📷</div>
-              <div class="texto-foto">${p.fotoIncidencia?'Foto adjunta ✓':'Foto de la incidencia (palet roto, avería...)'}</div>
+              <div class="texto-foto">Pulsa para añadir fotos (puedes seleccionar varias)</div>
             </div>
-            <img id="prev-inc-${ri}-${i}" class="preview-foto" style="${p.fotoIncidencia&&p.fotoIncidencia.startsWith('data:')?'display:block':''}" src="${p.fotoIncidencia&&p.fotoIncidencia.startsWith('data:')?p.fotoIncidencia:''}">
-            ${p.fotoIncidencia&&!p.fotoIncidencia.startsWith('data:')?`<a href="${p.fotoIncidencia}" target="_blank" class="btn-maps" style="display:inline-block;margin-top:8px">📎 Ver foto incidencia en Drive →</a>`:''}
+            <div id="lista-fotos-inc-${ri}-${i}">
+              ${(p.fotosIncidencia||[]).map((url,fi)=>`
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gris-borde);">
+                  <span style="font-size:18px;">📎</span>
+                  <a href="${url}" target="_blank" style="color:var(--azul);font-size:13px;flex:1;word-break:break-all;">Foto incidencia ${fi+1}</a>
+                </div>`).join('')}
+            </div>
           </div>
           <div class="separador"></div>
           <div class="fila-accion">
@@ -1381,30 +1395,38 @@ async function enviarParada(rutaId, pi, ri) {
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
 
-  // Subir fotos a Cloudinary y ESPERAR a que terminen antes de enviar emails
-  const fotoAlbaran = obtenerFotoPendiente(rutaId, pi, 'foto');
-  const fotoInc = obtenerFotoPendiente(rutaId, pi, 'inc');
+  // Subir múltiples fotos a Cloudinary
+  const fechaCarpeta = (ruta.fechaServicio||'sin-fecha').replace(/\//g,'-');
 
-  if (fotoAlbaran && fotoAlbaran.startsWith('data:')) {
-    await enviarFotoCloudinaryYGuardar(rutaId, pi, 'albaran', fotoAlbaran, usuarioActual, ruta.fechaServicio, p.cliente);
-    // Actualizar p.foto con la URL de Cloudinary
-    p.foto = obtenerURLCloudinary(rutaId, pi, 'albaran') || p.foto;
+  // Fotos albarán
+  const fotosAlb = (FOTOS_MULTI[rutaId+'-'+pi+'-alb'] || []);
+  const urlsAlb = [];
+  for (const f of fotosAlb) {
+    const url = await subirFotoCloudinary(f.base64, 'Albaranes_TransControl/'+usuarioActual+'/'+fechaCarpeta, 'alb_'+Date.now());
+    if (url) { urlsAlb.push(url); await sbFetch('fotos','POST',{fecha:ruta.fechaServicio,conductor:usuarioActual,ruta_id:rutaId,cliente:p.cliente,tipo:'albaran',url}); }
   }
-  if (fotoInc && fotoInc.startsWith('data:')) {
-    await enviarFotoCloudinaryYGuardar(rutaId, pi, 'incidencia', fotoInc, usuarioActual, ruta.fechaServicio, p.cliente);
-    // Actualizar p.fotoIncidencia con la URL de Cloudinary
-    p.fotoIncidencia = obtenerURLCloudinary(rutaId, pi, 'incidencia') || p.fotoIncidencia;
-  }
+  if (urlsAlb.length) p.fotos = [...(p.fotos||[]), ...urlsAlb];
+  // Compatibilidad con campo antiguo
+  if (urlsAlb.length) p.foto = urlsAlb[0];
 
-  // Ahora sí enviar emails — las fotos ya tienen URL de Cloudinary
+  // Fotos incidencia
+  const fotosInc = (FOTOS_MULTI[rutaId+'-'+pi+'-inc'] || []);
+  const urlsInc = [];
+  for (const f of fotosInc) {
+    const url = await subirFotoCloudinary(f.base64, 'Incidencias_TransControl/'+usuarioActual+'/'+fechaCarpeta, 'inc_'+Date.now());
+    if (url) { urlsInc.push(url); await sbFetch('fotos','POST',{fecha:ruta.fechaServicio,conductor:usuarioActual,ruta_id:rutaId,cliente:p.cliente,tipo:'incidencia',url}); }
+  }
+  if (urlsInc.length) p.fotosIncidencia = [...(p.fotosIncidencia||[]), ...urlsInc];
+  if (urlsInc.length) p.fotoIncidencia = urlsInc[0];
+
+  // Limpiar almacén
+  delete FOTOS_MULTI[rutaId+'-'+pi+'-alb'];
+  delete FOTOS_MULTI[rutaId+'-'+pi+'-inc'];
+
+  // Enviar emails con todos los enlaces
   const minutosEspera = calcularTiempoEspera(p.llegada, p.salida);
-  console.log('[ALERTA] Minutos espera:', minutosEspera, '| Incidencia:', !!p.incidencia.trim(), '| FotoInc:', !!p.fotoIncidencia);
-  if (minutosEspera !== null && minutosEspera > 60) {
-    enviarAlertaEspera(usuarioActual, ruta, p);
-  }
-  if (p.fotoIncidencia || p.incidencia.trim()) {
-    enviarAlertaDevolucion(usuarioActual, ruta, p);
-  }
+  if (minutosEspera !== null && minutosEspera > 60) enviarAlertaEspera(usuarioActual, ruta, p);
+  if (urlsInc.length || p.incidencia.trim()) enviarAlertaDevolucion(usuarioActual, ruta, p, urlsInc);
 
   limpiarFotosPendientes(rutaId, pi);
   toast('✓ Parada registrada');
@@ -1428,6 +1450,68 @@ function actualizarPalets(ri, pi) {
 function toggleParada(ri, pi) {
   document.getElementById(`body-${ri}-${pi}`).classList.toggle('abierto');
   document.getElementById(`chev-${ri}-${pi}`).classList.toggle('girado');
+}
+
+// Almacén de fotos pendientes múltiples
+const FOTOS_MULTI = {}; // clave: "rutaId-pi-tipo" → [{base64, nombre}]
+
+function añadirFotos(rutaId, pi, tipo, input) {
+  if (!input.files || !input.files.length) return;
+  const clave = rutaId + '-' + pi + '-' + tipo;
+  FOTOS_MULTI[clave] = FOTOS_MULTI[clave] || [];
+
+  // Encontrar el ri para actualizar la lista visual
+  const rutas = rutasDelConductorVisibles(usuarioActual);
+  const ri = rutas.findIndex(r => r.rutaId === rutaId);
+
+  const archivos = Array.from(input.files);
+  let procesadas = 0;
+
+  archivos.forEach(file => {
+    const r = new FileReader();
+    r.onload = e => {
+      comprimirImagen(e.target.result, base64 => {
+        FOTOS_MULTI[clave].push({base64, nombre: file.name});
+        procesadas++;
+        // Actualizar lista visual
+        const listaId = tipo === 'inc' ? `lista-fotos-inc-${ri}-${pi}` : `lista-fotos-alb-${ri}-${pi}`;
+        const lista = document.getElementById(listaId);
+        if (lista) {
+          lista.innerHTML = FOTOS_MULTI[clave].map((f, fi) => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gris-borde);">
+              <span style="font-size:18px;">📎</span>
+              <span style="color:var(--blanco);font-size:13px;flex:1;">${f.nombre} <span style="color:var(--verde);">✓</span></span>
+              <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${fi})" 
+                style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:16px;">✕</button>
+            </div>`).join('');
+        }
+        if (procesadas === archivos.length) toast(`✓ ${procesadas} foto(s) añadida(s)`);
+      });
+    };
+    r.readAsDataURL(file);
+  });
+  input.value = ''; // Reset para poder añadir más
+}
+
+function quitarFotoMulti(rutaId, pi, tipo, fi) {
+  const clave = rutaId + '-' + pi + '-' + tipo;
+  if (FOTOS_MULTI[clave]) {
+    FOTOS_MULTI[clave].splice(fi, 1);
+    // Re-renderizar lista
+    const rutas = rutasDelConductorVisibles(usuarioActual);
+    const ri = rutas.findIndex(r => r.rutaId === rutaId);
+    const listaId = tipo === 'inc' ? `lista-fotos-inc-${ri}-${pi}` : `lista-fotos-alb-${ri}-${pi}`;
+    const lista = document.getElementById(listaId);
+    if (lista) {
+      lista.innerHTML = FOTOS_MULTI[clave].map((f, idx) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gris-borde);">
+          <span style="font-size:18px;">📎</span>
+          <span style="color:var(--blanco);font-size:13px;flex:1;">${f.nombre} <span style="color:var(--verde);">✓</span></span>
+          <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${idx})" 
+            style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:16px;">✕</button>
+        </div>`).join('');
+    }
+  }
 }
 
 function prevFoto(rutaId, pi, input) {
@@ -1522,6 +1606,7 @@ async function guardarRutaSheets(ruta) {
   }));
   const body = {
     ruta_id: ruta.rutaId,
+    orden: ruta.orden || 999,
     fecha_asignada: ruta.fechaAsignada,
     fecha_servicio: ruta.fechaServicio,
     conductor: ruta.conductor,
@@ -1829,6 +1914,8 @@ function renderRutasCreadas() {
         ${ruta.horaInicio?`<span class="ruta-hora-tag">🕐 ${ruta.horaInicio}</span>`:''}
         ${ruta.horaAviso?`<span style="font-size:11px;font-weight:700;background:rgba(249,115,22,.15);color:var(--naranja);padding:3px 8px;border-radius:6px;">🔔 Aviso: ${ruta.horaAviso}${ruta.diaAviso==='anterior'?' (día ant.)':''}</span>`:''}
         ${ruta.pdfNombre?`<span class="ruta-conductor-tag">📄 PDF</span>`:''}
+        <button class="btn-reasignar" style="background:rgba(255,255,255,.08);border-color:var(--gris-borde);color:var(--blanco-suave);padding:6px 8px;" onclick="moverRuta('${ruta.rutaId}','arriba')">↑</button>
+        <button class="btn-reasignar" style="background:rgba(255,255,255,.08);border-color:var(--gris-borde);color:var(--blanco-suave);padding:6px 8px;" onclick="moverRuta('${ruta.rutaId}','abajo')">↓</button>
         <button class="btn-reasignar" style="background:rgba(59,130,246,.15);border-color:var(--azul);color:var(--azul);" onclick="editarRuta('${ruta.rutaId}')">✏️ Editar</button>
         <button class="btn-reasignar" onclick="abrirModalReasignar('${ruta.rutaId}')">🔄 Reasignar</button>
         <button class="btn-eliminar-ruta" onclick="abrirModalEliminarRuta('${ruta.rutaId}')">✕ Eliminar</button>
@@ -1851,6 +1938,45 @@ async function confirmarEliminarRuta() {
   cerrarModalEliminarRuta();
   renderRutasCreadas(); renderTiempoReal();
   toast('✓ Ruta eliminada');
+}
+
+async function moverRuta(rutaId, direccion) {
+  // Ordenar por hora_inicio primero, luego por orden manual
+  const mismaFecha = rutasActivas.filter(r => {
+    const ruta = rutasActivas.find(x => x.rutaId === rutaId);
+    return r.fechaServicio === ruta.fechaServicio && r.conductor === ruta.conductor;
+  });
+  
+  // Asignar orden actual si no tienen
+  mismaFecha.forEach((r, i) => { if (!r.orden || r.orden === 999) r.orden = (i + 1) * 10; });
+  
+  const idx = mismaFecha.findIndex(r => r.rutaId === rutaId);
+  if (idx < 0) return;
+  if (direccion === 'arriba' && idx === 0) return;
+  if (direccion === 'abajo' && idx === mismaFecha.length - 1) return;
+  
+  const swapIdx = direccion === 'arriba' ? idx - 1 : idx + 1;
+  const ordenA = mismaFecha[idx].orden;
+  const ordenB = mismaFecha[swapIdx].orden;
+  mismaFecha[idx].orden = ordenB;
+  mismaFecha[swapIdx].orden = ordenA;
+  
+  // Guardar en Supabase
+  await Promise.all([
+    sbFetch('rutas_activas', 'PATCH', {orden: mismaFecha[idx].orden}, `?ruta_id=eq.${encodeURIComponent(mismaFecha[idx].rutaId)}`),
+    sbFetch('rutas_activas', 'PATCH', {orden: mismaFecha[swapIdx].orden}, `?ruta_id=eq.${encodeURIComponent(mismaFecha[swapIdx].rutaId)}`)
+  ]);
+  
+  // Reordenar en memoria
+  rutasActivas.sort((a, b) => {
+    if (a.fechaServicio !== b.fechaServicio) return a.fechaServicio.localeCompare(b.fechaServicio);
+    if (a.orden !== b.orden) return a.orden - b.orden;
+    return (a.horaInicio || '').localeCompare(b.horaInicio || '');
+  });
+  
+  renderRutasCreadas();
+  renderTiempoReal();
+  toast('✓ Orden actualizado');
 }
 
 function editarRuta(rutaId) {
