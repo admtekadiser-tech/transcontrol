@@ -1278,7 +1278,7 @@ function renderConductor(nombre) {
           <div class="fila-accion">
             <label>📸 Fotos de la incidencia (opcional)</label>
             <div class="input-foto" onclick="document.getElementById('foto-inc-${ri}-${i}').click()">
-              <input type="file" id="foto-inc-${ri}-${i}" accept="image/*" multiple onchange="añadirFotos('${ruta.rutaId}',${i},'inc',this)">
+              <input type="file" id="foto-inc-${ri}-${i}" accept="image/*" multiple onchange="añadirFotos('${ruta.rutaId}',${i},'inc',this,${ri})">
               <div class="icono-foto">📷</div>
               <div class="texto-foto">Pulsa para añadir fotos (puedes seleccionar varias)</div>
             </div>
@@ -1292,14 +1292,19 @@ function renderConductor(nombre) {
           </div>
           <div class="separador"></div>
           <div class="fila-accion">
-            <label>📸 Foto del albarán</label>
-            <div class="input-foto" onclick="document.getElementById('foto-${ri}-${i}').click()">
-              <input type="file" id="foto-${ri}-${i}" accept="image/*" capture="environment" onchange="prevFoto('${ruta.rutaId}',${i},this)">
+            <label>📸 Fotos del albarán</label>
+            <div class="input-foto" onclick="document.getElementById('foto-alb-${ri}-${i}').click()">
+              <input type="file" id="foto-alb-${ri}-${i}" accept="image/*" multiple onchange="añadirFotos('${ruta.rutaId}',${i},'alb',this,${ri})">
               <div class="icono-foto">📷</div>
-              <div class="texto-foto">${p.foto?'Foto adjunta ✓':'Pulsa para fotografiar el albarán'}</div>
+              <div class="texto-foto">Pulsa para añadir fotos del albarán</div>
             </div>
-            <img id="prev-${ri}-${i}" class="preview-foto" style="${p.foto&&p.foto.startsWith('data:')?'display:block':''}" src="${p.foto&&p.foto.startsWith('data:')?p.foto:''}">
-            ${p.foto&&!p.foto.startsWith('data:')?`<a href="${p.foto}" target="_blank" class="btn-maps" style="display:inline-block;margin-top:8px">📎 Ver albarán en Drive →</a>`:''}
+            <div id="lista-fotos-alb-${ri}-${i}">
+              ${(p.fotos||[]).map((url,fi)=>`
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gris-borde);">
+                  <span style="font-size:18px;">📎</span>
+                  <a href="${url}" target="_blank" style="color:var(--azul);font-size:13px;flex:1;">Foto albarán ${fi+1}</a>
+                </div>`).join('')}
+            </div>
           </div>
           ${p.enviado
             ? `<div class="aviso-enviado">✓ Parada registrada</div>`
@@ -1467,7 +1472,7 @@ function toggleParada(ri, pi) {
 // Almacén de fotos pendientes múltiples — guardamos los File objects directamente
 const FOTOS_MULTI = {}; // clave: "rutaId-pi-tipo" → [File]
 
-function añadirFotos(rutaId, pi, tipo, input) {
+function añadirFotos(rutaId, pi, tipo, input, ri) {
   if (!input.files || !input.files.length) return;
   const clave = rutaId + '-' + pi + '-' + tipo;
   FOTOS_MULTI[clave] = FOTOS_MULTI[clave] || [];
@@ -1475,9 +1480,6 @@ function añadirFotos(rutaId, pi, tipo, input) {
   const archivos = Array.from(input.files);
   archivos.forEach(file => FOTOS_MULTI[clave].push(file));
 
-  // Actualizar lista visual
-  const rutas = rutasDelConductorVisibles(usuarioActual);
-  const ri = rutas.findIndex(r => r.rutaId === rutaId);
   actualizarListaFotos(rutaId, pi, tipo, ri);
   toast(`✓ ${FOTOS_MULTI[clave].length} foto(s) seleccionada(s)`);
   input.value = '';
@@ -1493,17 +1495,15 @@ function actualizarListaFotos(rutaId, pi, tipo, ri) {
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gris-borde);">
       <span style="font-size:20px;">📎</span>
       <span style="color:var(--blanco);font-size:13px;flex:1;word-break:break-all;">${f.name}</span>
-      <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${fi})"
+      <button onclick="quitarFotoMulti('${rutaId}',${pi},'${tipo}',${fi},${ri})"
         style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:18px;padding:4px;">✕</button>
     </div>`).join('') || '<div style="color:var(--blanco-suave);font-size:12px;padding:4px 0;">Sin fotos añadidas</div>';
 }
 
-function quitarFotoMulti(rutaId, pi, tipo, fi) {
+function quitarFotoMulti(rutaId, pi, tipo, fi, ri) {
   const clave = rutaId + '-' + pi + '-' + tipo;
   if (FOTOS_MULTI[clave]) {
     FOTOS_MULTI[clave].splice(fi, 1);
-    const rutas = rutasDelConductorVisibles(usuarioActual);
-    const ri = rutas.findIndex(r => r.rutaId === rutaId);
     actualizarListaFotos(rutaId, pi, tipo, ri);
   }
 }
