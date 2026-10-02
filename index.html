@@ -926,12 +926,22 @@ async function cargarTodo(mostrarLoading) {
         }))
     }));
 
-    // Ordenar rutas por fecha + orden manual (el orden lo controla admin con ↑↓)
+    // Ordenar rutas por fecha + orden manual + hora inicio
     const fechaANum = f => { if (!f) return 0; const p = f.split('/'); return parseInt(p[2]+p[1]+p[0])||0; };
     rutasActivas.sort((a, b) => {
       const fd = fechaANum(a.fechaServicio) - fechaANum(b.fechaServicio);
       if (fd !== 0) return fd;
-      return (a.orden||999) - (b.orden||999);
+      const aOrden = a.orden || 999;
+      const bOrden = b.orden || 999;
+      // Si ambos tienen orden válido (< 900), usar orden manual
+      if (aOrden < 900 && bOrden < 900) return aOrden - bOrden;
+      // Si solo uno tiene orden válido, ese va primero
+      if (aOrden < 900) return -1;
+      if (bOrden < 900) return 1;
+      // Ambos legacy (999) — ordenar por hora de inicio
+      const aHora = a.horaInicio || 'ZZ';
+      const bHora = b.horaInicio || 'ZZ';
+      return aHora.localeCompare(bHora);
     });
 
     incidencias = (incidenciasData||[]).map(i => ({
@@ -1896,8 +1906,10 @@ async function crearRuta() {
     conductor, nombreRuta, horaInicio, horaAviso, diaAviso, observaciones,
     orden: (() => {
       const fechaC = fechaInputAFechaCorta(fechaServicioInput);
-      const rutasDelDia = rutasActivas.filter(r => r.conductor === conductor && r.fechaServicio === fechaC);
-      const max = rutasDelDia.length > 0 ? Math.max(...rutasDelDia.map(r => r.orden || 0)) : 0;
+      const rutasDelDia = rutasActivas.filter(r => r.conductor === conductor && r.fechaServicio === fechaC && r.rutaId !== rutaEnEdicion);
+      // Usar número de rutas existentes + 1, ignorando valores legacy de 999
+      const ordenesValidos = rutasDelDia.map(r => r.orden || 999).filter(o => o < 900);
+      const max = ordenesValidos.length > 0 ? Math.max(...ordenesValidos) : rutasDelDia.length * 10;
       return rutaEnEdicion ? (rutasActivas.find(r=>r.rutaId===rutaEnEdicion)?.orden || max + 10) : max + 10;
     })(),
     pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
