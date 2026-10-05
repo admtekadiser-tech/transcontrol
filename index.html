@@ -938,7 +938,12 @@ async function cargarTodo(mostrarLoading) {
       // Si solo uno tiene orden válido, ese va primero
       if (aOrden < 900) return -1;
       if (bOrden < 900) return 1;
-      // Ambos legacy (999) — ordenar por hora de inicio
+      // Turno de noche (día anterior) siempre va primero
+      const aNoche = (a.diaAviso === 'anterior');
+      const bNoche = (b.diaAviso === 'anterior');
+      if (aNoche && !bNoche) return -1;
+      if (!aNoche && bNoche) return 1;
+      // Resto — ordenar por hora de inicio (sin hora va al final)
       const aHora = a.horaInicio || 'ZZ';
       const bHora = b.horaInicio || 'ZZ';
       return aHora.localeCompare(bHora);
