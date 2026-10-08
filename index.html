@@ -931,22 +931,22 @@ async function cargarTodo(mostrarLoading) {
     rutasActivas.sort((a, b) => {
       const fd = fechaANum(a.fechaServicio) - fechaANum(b.fechaServicio);
       if (fd !== 0) return fd;
-      const aOrden = a.orden || 999;
-      const bOrden = b.orden || 999;
-      // Si ambos tienen orden válido (< 900), usar orden manual
-      if (aOrden < 900 && bOrden < 900) return aOrden - bOrden;
-      // Si solo uno tiene orden válido, ese va primero
-      if (aOrden < 900) return -1;
-      if (bOrden < 900) return 1;
       // Turno de noche (día anterior) siempre va primero
       const aNoche = (a.diaAviso === 'anterior');
       const bNoche = (b.diaAviso === 'anterior');
       if (aNoche && !bNoche) return -1;
       if (!aNoche && bNoche) return 1;
-      // Resto — ordenar por hora de inicio (sin hora va al final)
-      const aHora = a.horaInicio || 'ZZ';
-      const bHora = b.horaInicio || 'ZZ';
-      return aHora.localeCompare(bHora);
+      // Si ambos tienen hora de inicio, ordenar por hora
+      const aHora = a.horaInicio || '';
+      const bHora = b.horaInicio || '';
+      if (aHora && bHora) return aHora.localeCompare(bHora);
+      // Si solo uno tiene hora, ese va primero
+      if (aHora && !bHora) return -1;
+      if (!aHora && bHora) return 1;
+      // Ninguno tiene hora — usar orden manual de creación
+      const aOrden = a.orden || 999;
+      const bOrden = b.orden || 999;
+      return aOrden - bOrden;
     });
 
     incidencias = (incidenciasData||[]).map(i => ({
