@@ -2026,6 +2026,18 @@ function editarRuta(rutaId) {
   if (!ruta) return;
   rutaEnEdicion = rutaId;
 
+  // Conservar PDF de la ruta original
+  if (ruta.pdfNombre) {
+    pdfAdminNombre = ruta.pdfNombre;
+    pdfAdminData = ruta.pdfData || '';
+    document.getElementById('pdf-adjunto-preview').style.display = 'flex';
+    document.getElementById('pdf-nombre-admin').textContent = ruta.pdfNombre + ' (existente)';
+  } else {
+    pdfAdminNombre = '';
+    pdfAdminData = '';
+    document.getElementById('pdf-adjunto-preview').style.display = 'none';
+  }
+
   // Rellenar formulario con datos de la ruta
   document.getElementById('admin-select-conductor').value = ruta.conductor;
   document.getElementById('admin-nombre-ruta').value = ruta.nombreRuta || '';
