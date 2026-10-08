@@ -1739,7 +1739,7 @@ function renderTiempoReal() {
               </div>
             </div>`;
       }).join('');
-      return `<div class="ruta-mini-bloque"><div class="ruta-mini-bloque-titulo">${ruta.nombreRuta} <span style="color:var(--blanco-suave);font-weight:400">— ${ruta.fechaServicio}</span></div>${detalle}</div>`;
+      return `<div class="ruta-mini-bloque"><div class="ruta-mini-bloque-titulo" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${ruta.nombreRuta} <span style="color:var(--blanco-suave);font-weight:400">— ${ruta.fechaServicio}</span><button onclick="event.stopPropagation();moverRuta('${ruta.rutaId}','arriba')" style="background:rgba(255,255,255,.08);border:1px solid var(--gris-borde);color:var(--blanco-suave);border-radius:6px;padding:1px 7px;cursor:pointer;font-size:12px;flex-shrink:0;">↑</button><button onclick="event.stopPropagation();moverRuta('${ruta.rutaId}','abajo')" style="background:rgba(255,255,255,.08);border:1px solid var(--gris-borde);color:var(--blanco-suave);border-radius:6px;padding:1px 7px;cursor:pointer;font-size:12px;flex-shrink:0;">↓</button></div>${detalle}</div>`;
     }).join('');
     return `<div class="conductor-row">
       <div class="conductor-header" onclick="toggleCA(${ci})">
@@ -1955,8 +1955,6 @@ function renderRutasCreadas() {
         ${ruta.horaInicio?`<span class="ruta-hora-tag">🕐 ${ruta.horaInicio}</span>`:''}
         ${ruta.horaAviso?`<span style="font-size:11px;font-weight:700;background:rgba(249,115,22,.15);color:var(--naranja);padding:3px 8px;border-radius:6px;">🔔 Aviso: ${ruta.horaAviso}${ruta.diaAviso==='anterior'?' (día ant.)':''}</span>`:''}
         ${ruta.pdfNombre?`<span class="ruta-conductor-tag">📄 PDF</span>`:''}
-        <button onclick="event.stopPropagation();moverRuta('${ruta.rutaId}','arriba')" style="background:rgba(255,255,255,.08);border:1px solid var(--gris-borde);color:var(--blanco-suave);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:13px;">↑</button>
-        <button onclick="event.stopPropagation();moverRuta('${ruta.rutaId}','abajo')" style="background:rgba(255,255,255,.08);border:1px solid var(--gris-borde);color:var(--blanco-suave);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:13px;">↓</button>
         <button class="btn-reasignar" style="background:rgba(255,255,255,.08);border-color:var(--gris-borde);color:var(--blanco-suave);padding:6px 8px;" onclick="moverRuta('${ruta.rutaId}','arriba')">↑</button>
         <button class="btn-reasignar" style="background:rgba(255,255,255,.08);border-color:var(--gris-borde);color:var(--blanco-suave);padding:6px 8px;" onclick="moverRuta('${ruta.rutaId}','abajo')">↓</button>
         <button class="btn-reasignar" style="background:rgba(59,130,246,.15);border-color:var(--azul);color:var(--azul);" onclick="editarRuta('${ruta.rutaId}')">✏️ Editar</button>
