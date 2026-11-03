@@ -1380,7 +1380,7 @@ function registrarHora(ri, pi, campo) {
   if (!ruta) return;
   const ahora = horaActual();
   ruta.paradas[pi][campo] = ahora;
-  guardarRegistroSheets(usuarioActual, ruta, ruta.paradas[pi]);
+  guardarRegistroSheets(usuarioActual, ruta, ruta.paradas[pi], pi);
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
   toast(`${labelCampo(campo)}: ${ahora}`);
@@ -1393,7 +1393,25 @@ function registrarHora(ri, pi, campo) {
   },50);
 }
 
+const _ENVIANDO = {};
 async function enviarParada(rutaId, pi, ri) {
+  const k = rutaId + '-' + pi;
+  if (_ENVIANDO[k]) return; // ya se está enviando: ignorar segunda pulsación
+  _ENVIANDO[k] = true;
+  const btn = document.getElementById('btn-registrar-' + rutaId + '-' + pi);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
+  try {
+    await _enviarParadaInterno(rutaId, pi, ri);
+  } catch (e) {
+    console.error('[PARADA] Error:', e);
+    toast('Error al registrar la parada. Pulsa Actualizar y compruébalo.', 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Registrar parada'; }
+  } finally {
+    delete _ENVIANDO[k];
+  }
+}
+
+async function _enviarParadaInterno(rutaId, pi, ri) {
   const ruta = rutasActivas.find(r => r.rutaId === rutaId);
   if (!ruta) return;
   const p = ruta.paradas[pi];
@@ -1423,7 +1441,7 @@ async function enviarParada(rutaId, pi, ri) {
     guardarIncidenciaSheets(incObj);
   }
 
-  guardarRegistroSheets(usuarioActual, ruta, p);
+  guardarRegistroSheets(usuarioActual, ruta, p, pi);
   guardarRutaSheets(ruta);
   guardarCalendarSheets(ruta);
 
@@ -1596,10 +1614,10 @@ function prevFotoInc(rutaId, pi, input) {
 // ══════════════════════════════════════════
 // ENVÍOS A SHEETS
 // ══════════════════════════════════════════
-async function guardarRegistroSheets(conductor, ruta, parada) {
-  await sbFetch('registros', 'POST', {
-    fecha: fechaCorta(),
-    conductor,
+async function guardarRegistroSheets(conductor, ruta, parada, pi) {
+  // Una sola fila por parada: si ya existe se ACTUALIZA, no se inserta otra
+  const key = (pi !== undefined && pi !== null) ? (ruta.rutaId + '-' + pi) : null;
+  const datos = {
     nombre_ruta: String(ruta.nombreRuta||''),
     cliente: parada.cliente,
     direccion: parada.direccion,
@@ -1611,7 +1629,48 @@ async function guardarRegistroSheets(conductor, ruta, parada) {
     palets_entregados: parada.paletsEntregados||0,
     palets_recogidos: parada.paletsRecogidos||0,
     evoucher: parada.evoucher||''
-  });
+  };
+  const filtro = key ? '?parada_key=eq.' + encodeURIComponent(key) : '';
+  try {
+    if (key) {
+      const ex = await sbFetch('registros', 'GET', null, filtro + '&select=id');
+      if (Array.isArray(ex) && ex.length > 0) {
+        await sbFetch('registros', 'PATCH', { conductor, ...datos }, filtro);
+        return;
+      }
+      const ok = await sbFetch('registros', 'POST', { fecha: fechaCorta(), conductor, ...datos, parada_key: key });
+      if (ok) return;
+      // Si el POST falla puede ser una pulsación simultánea que ya la creó: comprobar
+      const ex2 = await sbFetch('registros', 'GET', null, filtro + '&select=id');
+      if (Array.isArray(ex2) && ex2.length > 0) {
+        await sbFetch('registros', 'PATCH', { conductor, ...datos }, filtro);
+        return;
+      }
+      // Si no existe (p.ej. columna parada_key sin crear todavía) guardar igualmente
+    }
+    await sbFetch('registros', 'POST', { fecha: fechaCorta(), conductor, ...datos });
+  } catch (e) { console.error('[REGISTRO] Error guardando:', e); }
+}
+async function guardarHistorialRuta(ruta) {
+  // Copia permanente de cada ruta asignada. Ningún borrado/reseteo/edición la toca.
+  try {
+    const clave = '?ruta_id=eq.' + encodeURIComponent(ruta.rutaId);
+    const body = {
+      ruta_id: ruta.rutaId,
+      fecha_servicio: ruta.fechaServicio,
+      fecha_asignada: ruta.fechaAsignada,
+      conductor: ruta.conductor,
+      nombre_ruta: String(ruta.nombreRuta||''),
+      hora_inicio: ruta.horaInicio||'',
+      dia_aviso: ruta.diaAviso||'mismo',
+      observaciones: ruta.observaciones||'',
+      pdf_nombre: ruta.pdfNombre||'',
+      paradas: (ruta.paradas||[]).map(p => ({ cliente: p.cliente, direccion: p.direccion||'' }))
+    };
+    const ex = await sbFetch('historial_rutas', 'GET', null, clave + '&select=id');
+    if (Array.isArray(ex) && ex.length > 0) await sbFetch('historial_rutas', 'PATCH', body, clave);
+    else await sbFetch('historial_rutas', 'POST', body, '');
+  } catch (e) { console.warn('[HISTORIAL] No se pudo guardar:', e); }
 }
 async function guardarIncidenciaSheets(inc) {
   await sbFetch('incidencias', 'POST', {
@@ -1872,7 +1931,8 @@ async function crearRuta() {
   const conductor = document.getElementById('admin-select-conductor').value;
   if (!conductor){toast('Selecciona un conductor','err');return;}
   
-  // Si estamos editando, eliminar la ruta antigua primero
+  // Si estamos editando, eliminar la ruta antigua primero (conservando su ruta_id)
+  const idEditado = rutaEnEdicion;
   if (rutaEnEdicion) {
     rutasActivas = rutasActivas.filter(r => r.rutaId !== rutaEnEdicion);
     await sbFetch('rutas_activas', 'DELETE', null, `?ruta_id=eq.${encodeURIComponent(rutaEnEdicion)}`);
@@ -1905,7 +1965,7 @@ async function crearRuta() {
   });
   if(!paradas.length){toast('Añade al menos una parada con cliente','err');return;}
   const ruta = {
-    rutaId: generarRutaId(),
+    rutaId: idEditado || generarRutaId(),
     fechaAsignada: fechaCorta(),
     fechaServicio: fechaInputAFechaCorta(fechaServicioInput),
     conductor, nombreRuta, horaInicio, horaAviso, diaAviso, observaciones,
@@ -1926,6 +1986,7 @@ async function crearRuta() {
     window.PDF_STORE[ruta.rutaId + '_pdf'] = pdfAdminData;
   }
   const guardadoOk = await guardarRutaSheets(ruta);
+  await guardarHistorialRuta(ruta);
   guardarCalendarSheets(ruta);
   toast(`✓ Ruta "${nombreRuta}" asignada a ${conductor} para el ${ruta.fechaServicio}`);
   // Mantener conductor seleccionado para asignar otra ruta rápidamente
@@ -2135,7 +2196,7 @@ async function guardarParadaAdmin() {
 
   await guardarRutaSheets(ruta);
   if (p.enviado) {
-    await guardarRegistroSheets(ruta.conductor, ruta, p);
+    await guardarRegistroSheets(ruta.conductor, ruta, p, _editParadaPi);
   }
   cerrarModalEditarParada();
   renderAdmin();
@@ -2158,6 +2219,7 @@ async function confirmarReasignacion() {
   const anterior = ruta.conductor;
   ruta.conductor = nuevo;
   await sbFetch('rutas_activas', 'PATCH', {conductor: nuevo}, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
+  try { await sbFetch('historial_rutas', 'PATCH', {conductor: nuevo}, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`); } catch(e) {}
   toast(`✓ Ruta transferida de ${anterior} a ${nuevo}`);
   cerrarModal();
   renderRutasCreadas(); renderTiempoReal();
