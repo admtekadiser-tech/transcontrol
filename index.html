@@ -1153,6 +1153,8 @@ function normalizarHora(str) {
 function rutasDelConductorVisibles(nombre) {
   const hoy = normalizarFecha(fechaCorta());
   const manana = normalizarFecha(fechaCortaManana());
+  const _a = new Date(); _a.setDate(_a.getDate() - 1);
+  const ayer = normalizarFecha(fechaCorta(_a));
   return rutasActivas.filter(r => {
     if (normalizarNombre(r.conductor) !== normalizarNombre(nombre)) return false;
     const fechaRuta = normalizarFecha(r.fechaServicio);
@@ -1160,6 +1162,8 @@ function rutasDelConductorVisibles(nombre) {
     if (fechaRuta === hoy || fechaRuta === manana) return true;
     // Ruta de mañana con aviso el día anterior (turno de noche)
     if (fechaRuta === manana && r.diaAviso === 'anterior') return true;
+    // Ruta de ayer con alguna parada EN CURSO (turno de noche que cruza la medianoche)
+    if (fechaRuta === ayer && r.paradas.some(p => p.llegada && !p.enviado)) return true;
     return false;
   });
 }
@@ -1262,10 +1266,10 @@ function renderConductor(nombre) {
           </div>
           ${bloqueado ? `<div style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2);border-radius:10px;padding:14px;text-align:center;color:var(--morado);font-size:13px;font-weight:600;margin-bottom:4px;">🔒 Registro disponible el ${ruta.fechaServicio}</div>` : `<div class="botones-registro">`}
           ${!bloqueado ? `
-            ${btnReg(ri,i,'llegada','🟡','Llegada',p.llegada)}
-            ${btnReg(ri,i,'inicioDesc','🔵','Ini. Descarga',p.inicioDesc)}
-            ${btnReg(ri,i,'finDesc','🟠','Fin Descarga',p.finDesc)}
-            ${btnReg(ri,i,'salida','🟢','Salida',p.salida)}
+            ${btnReg(ri,i,'llegada','🟡','Llegada',p.llegada,ruta.rutaId)}
+            ${btnReg(ri,i,'inicioDesc','🔵','Ini. Descarga',p.inicioDesc,ruta.rutaId)}
+            ${btnReg(ri,i,'finDesc','🟠','Fin Descarga',p.finDesc,ruta.rutaId)}
+            ${btnReg(ri,i,'salida','🟢','Salida',p.salida,ruta.rutaId)}
           </div>
           <div class="separador"></div>
           <div class="fila-accion">
@@ -1283,14 +1287,14 @@ function renderConductor(nombre) {
                 <input type="number" min="0" id="palets-entregados-${ri}-${i}"
                   value="${p.paletsEntregados||0}"
                   style="width:100%;box-sizing:border-box;text-align:center;font-size:18px;font-weight:800;padding:8px;background:var(--gris-oscuro);border:1px solid var(--gris-borde);border-radius:8px;color:var(--blanco);"
-                  oninput="actualizarPalets(${ri},${i})">
+                  oninput="actualizarPalets('${ruta.rutaId}',${ri},${i})">
               </div>
               <div style="flex:1;min-width:0;">
                 <label style="font-size:10px;font-weight:600;color:var(--blanco-suave);display:block;margin-bottom:4px;">PALETS RECOGIDOS</label>
                 <input type="number" min="0" id="palets-recogidos-${ri}-${i}"
                   value="${p.paletsRecogidos||0}"
                   style="width:100%;box-sizing:border-box;text-align:center;font-size:18px;font-weight:800;padding:8px;background:var(--gris-oscuro);border:1px solid var(--gris-borde);border-radius:8px;color:var(--blanco);"
-                  oninput="actualizarPalets(${ri},${i})">
+                  oninput="actualizarPalets('${ruta.rutaId}',${ri},${i})">
               </div>
             </div>
             <div>
@@ -1366,31 +1370,44 @@ function renderConductor(nombre) {
   }).join('');
 }
 
-function btnReg(ri, pi, campo, ico, label, valor) {
-  return `<div class="btn-registro ${valor?'registrado':''}" onclick="${valor?'':` registrarHora(${ri},${pi},'${campo}')`}">
+function btnReg(ri, pi, campo, ico, label, valor, rutaId) {
+  return `<div class="btn-registro ${valor?'registrado':''}" onclick="${valor?'':` registrarHora('${rutaId}',${pi},'${campo}')`}">
     <div class="icono">${ico}</div><div class="etiqueta">${label}</div><div class="hora-reg">${valor||'—'}</div>
   </div>`;
 }
 
-function registrarHora(ri, pi, campo) {
-  const rutas = rutasDelConductorVisibles(usuarioActual);
-  if (!rutas[ri]) return;
-  const rutaId = rutas[ri].rutaId;
+async function registrarHora(rutaId, pi, campo) {
+  // La ruta se identifica por su ID (no por su posición en pantalla, que puede haber cambiado)
   const ruta = rutasActivas.find(r => r.rutaId === rutaId);
-  if (!ruta) return;
+  if (!ruta || !ruta.paradas[pi]) {
+    toast('Esta ruta ha cambiado. Actualizando...', 'err');
+    await recargarDatos();
+    return;
+  }
+  const anterior = ruta.paradas[pi][campo];
   const ahora = horaActual();
   ruta.paradas[pi][campo] = ahora;
-  guardarRegistroSheets(usuarioActual, ruta, ruta.paradas[pi], pi);
-  guardarRutaSheets(ruta);
-  guardarCalendarSheets(ruta);
   toast(`${labelCampo(campo)}: ${ahora}`);
   renderConductor(usuarioActual);
-  setTimeout(()=>{
-    const body = document.getElementById(`body-${ri}-${pi}`);
-    const chev = document.getElementById(`chev-${ri}-${pi}`);
+  setTimeout(() => {
+    const riNuevo = rutasDelConductorVisibles(usuarioActual).findIndex(r => r.rutaId === rutaId);
+    const body = document.getElementById(`body-${riNuevo}-${pi}`);
+    const chev = document.getElementById(`chev-${riNuevo}-${pi}`);
     if (body) body.classList.add('abierto');
     if (chev) chev.classList.add('girado');
-  },50);
+  }, 50);
+
+  // Guardar SOLO si la ruta sigue existiendo (si administración la eliminó, no se vuelve a crear)
+  let res = null;
+  try { res = await guardarRutaSheets(ruta, true); } catch (e) { console.error('[HORA] Error guardando ruta:', e); }
+  if (res === 'eliminada') {
+    ruta.paradas[pi][campo] = anterior || null;
+    toast('⚠️ Administración ha eliminado esta ruta. Actualizando...', 'err');
+    await recargarDatos();
+    return;
+  }
+  guardarRegistroSheets(usuarioActual, ruta, ruta.paradas[pi], pi);
+  guardarCalendarSheets(ruta);
 }
 
 const _ENVIANDO = {};
@@ -1414,6 +1431,12 @@ async function enviarParada(rutaId, pi, ri) {
 async function _enviarParadaInterno(rutaId, pi, ri) {
   const ruta = rutasActivas.find(r => r.rutaId === rutaId);
   if (!ruta) return;
+  const existeRuta = await sbFetch('rutas_activas', 'GET', null, `?ruta_id=eq.${encodeURIComponent(rutaId)}&select=id`);
+  if (Array.isArray(existeRuta) && existeRuta.length === 0) {
+    toast('⚠️ Administración ha eliminado esta ruta. Actualizando...', 'err');
+    await recargarDatos();
+    return;
+  }
   const p = ruta.paradas[pi];
 
   p.incidencia = document.getElementById('inc-' + ri + '-' + pi).value;
@@ -1498,10 +1521,8 @@ function _legacy_unused(ri, pi) {
   // no usar — legacy
 }
 
-function actualizarPalets(ri, pi) {
-  const rutas = rutasDelConductorVisibles(usuarioActual);
-  if (!rutas[ri]) return;
-  const ruta = rutasActivas.find(r => r.rutaId === rutas[ri].rutaId);
+function actualizarPalets(rutaId, ri, pi) {
+  const ruta = rutasActivas.find(r => r.rutaId === rutaId);
   if (!ruta || !ruta.paradas[pi]) return;
   ruta.paradas[pi].paletsEntregados = parseInt(document.getElementById('palets-entregados-'+ri+'-'+pi).value)||0;
   ruta.paradas[pi].paletsRecogidos = parseInt(document.getElementById('palets-recogidos-'+ri+'-'+pi).value)||0;
@@ -1684,7 +1705,7 @@ async function guardarIncidenciaSheets(inc) {
     foto_url: inc.foto||''
   });
 }
-async function guardarRutaSheets(ruta) {
+async function guardarRutaSheets(ruta, soloActualizar) {
   const paradasLimpias = ruta.paradas.map(p => ({
     cliente: p.cliente, direccion: p.direccion,
     llegada: p.llegada||null, inicioDesc: p.inicioDesc||null,
@@ -1713,6 +1734,9 @@ async function guardarRutaSheets(ruta) {
   };
   // Verificar si la ruta ya existe en Supabase
   const existente = await sbFetch('rutas_activas', 'GET', null, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}&select=id`);
+  if (soloActualizar && Array.isArray(existente) && existente.length === 0) {
+    return 'eliminada'; // administración la eliminó: NO volver a crearla
+  }
   if (existente && existente.length > 0) {
     // Ruta existe — actualizar con PATCH
     await sbFetch('rutas_activas', 'PATCH', body, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
