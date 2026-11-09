@@ -1202,8 +1202,9 @@ function rutasDelConductorVisibles(nombre) {
     if (fechaRuta === hoy || fechaRuta === manana) return true;
     // Ruta de mañana con aviso el día anterior (turno de noche)
     if (fechaRuta === manana && r.diaAviso === 'anterior') return true;
-    // Ruta de ayer con alguna parada EN CURSO (turno de noche que cruza la medianoche)
-    if (fechaRuta === ayer && r.paradas.some(p => p.llegada && !p.enviado)) return true;
+    // Ruta de ayer que aún no está completada (turno de noche que cruza la medianoche):
+    // sigue visible hasta que se registren todas sus paradas
+    if (fechaRuta === ayer && r.paradas.some(p => !p.enviado)) return true;
     return false;
   });
 }
@@ -1220,6 +1221,10 @@ function esRutaDeManana(ruta) {
   const manana = normalizarFecha(fechaCortaManana());
   return normalizarFecha(ruta.fechaServicio) === manana;
 }
+function esRutaDeAyer(ruta) {
+  const a = new Date(); a.setDate(a.getDate() - 1);
+  return normalizarFecha(ruta.fechaServicio) === normalizarFecha(fechaCorta(a));
+}
 
 function renderConductor(nombre) {
   const rutas = rutasDelConductorVisibles(nombre);
@@ -1233,6 +1238,7 @@ function renderConductor(nombre) {
 
   cont.innerHTML = rutas.map((ruta, ri) => {
     const esManana = esRutaDeManana(ruta);
+    const esAyer = !esManana && esRutaDeAyer(ruta);
     const mapsLinks = ruta.paradas.map((p,i) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.direccion)}`);
     const completadas = ruta.paradas.filter(p=>p.enviado).length;
 
@@ -1399,7 +1405,7 @@ function renderConductor(nombre) {
           ${ruta.horaInicio?`<div class="ruta-grupo-meta-item">🕐 Inicio ruta: <strong>${ruta.horaInicio}</strong></div>`:''}
           ${ruta.horaAviso?`<div class="ruta-grupo-meta-item" style="color:var(--naranja)">🔔 Aviso conductor: <strong>${ruta.horaAviso}</strong>${ruta.diaAviso==='anterior'?' (día anterior)':''}</div>`:''}
           <div class="ruta-grupo-meta-item">📦 <strong>${esManana?ruta.paradas.length+' paradas':completadas+'/'+ruta.paradas.length+' completadas'}</strong></div>
-          <div class="ruta-grupo-meta-item" style="color:${esManana?'var(--morado)':'var(--verde)'}">📅 <strong>${esManana?'MAÑANA — '+ruta.fechaServicio:'HOY'}</strong></div>
+          <div class="ruta-grupo-meta-item" style="color:${esManana?'var(--morado)':esAyer?'var(--naranja)':'var(--verde)'}">📅 <strong>${esManana?'MAÑANA — '+ruta.fechaServicio:esAyer?'AYER — '+ruta.fechaServicio+' (sigue pendiente)':'HOY'}</strong></div>
         </div>
       </div>
       ${bannerManana}
