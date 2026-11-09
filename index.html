@@ -211,7 +211,7 @@
 
   .config-seccion { margin-bottom:24px; }
   .config-seccion-titulo { font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--blanco-suave); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--gris-borde); }
-  .conductor-config-row { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+  .conductor-config-row { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   .conductor-config-info { flex:1; }
   .conductor-config-nombre { font-weight:700; font-size:14px; }
   .conductor-config-pin { font-size:12px; color:var(--blanco-suave); margin-top:2px; }
@@ -533,6 +533,46 @@
     <div class="modal-btns">
       <button class="btn-modal-cancel" onclick="cerrarModalEditarParada()">Cancelar</button>
       <button class="btn-modal-rojo" style="background:var(--verde);border-color:var(--verde);" onclick="guardarParadaAdmin()">💾 Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR CONDUCTOR -->
+<div class="modal-overlay" id="modal-editar-conductor">
+  <div class="modal">
+    <div class="modal-titulo">✏️ Editar conductor</div>
+    <div class="modal-subtitulo">Si cambias el nombre, también se actualiza en sus rutas y en el histórico. Si tiene la app abierta, tendrá que salir y volver a entrar.</div>
+    <div style="margin-bottom:10px">
+      <label class="label">Nombre</label>
+      <input type="text" id="edit-cond-nombre" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div>
+      <label class="label">PIN (4 dígitos)</label>
+      <input type="text" id="edit-cond-pin" maxlength="4" inputmode="numeric" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-modal-cancel" onclick="cerrarModalEditarConductor()">Cancelar</button>
+      <button class="btn-modal-ok" id="btn-guardar-conductor" onclick="guardarEdicionConductor()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR CLIENTE -->
+<div class="modal-overlay" id="modal-editar-cliente">
+  <div class="modal">
+    <div class="modal-titulo">✏️ Editar cliente</div>
+    <div class="modal-subtitulo">El cambio vale para las rutas que crees a partir de ahora. Las rutas ya creadas conservan la dirección que tenían.</div>
+    <div style="margin-bottom:10px">
+      <label class="label">Nombre</label>
+      <input type="text" id="edit-cli-nombre" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div>
+      <label class="label">Dirección</label>
+      <input type="text" id="edit-cli-dir" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-modal-cancel" onclick="cerrarModalEditarCliente()">Cancelar</button>
+      <button class="btn-modal-ok" id="btn-guardar-cliente" onclick="guardarEdicionCliente()">💾 Guardar</button>
     </div>
   </div>
 </div>
@@ -2293,6 +2333,7 @@ function renderConfigConductores() {
     <div class="conductor-config-row">
       <div class="avatar" style="width:32px;height:32px;font-size:13px">${nombre.charAt(0)}</div>
       <div class="conductor-config-info"><div class="conductor-config-nombre">${nombre}</div><div class="conductor-config-pin">PIN: ${PINES[nombre]}</div></div>
+      <button style="background:rgba(59,130,246,.15);border:1px solid var(--azul);color:var(--azul);border-radius:8px;padding:5px 10px;font-family:Inter,sans-serif;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="editarConductorUI('${nombre.replace(/'/g,"\\'")}')">✏️ Editar</button>
       <button class="btn-eliminar-conductor" onclick="eliminarConductorUI('${nombre.replace(/'/g,"\\'")}')">✕ Eliminar</button>
     </div>`).join('');
 }
@@ -2341,9 +2382,124 @@ function renderConfigClientes() {
         font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">
         ${c.devuelvePalets?'⭐ Devuelve palets':'☆ No devuelve'}
       </button>
+      <button style="background:rgba(59,130,246,.15);border:1px solid var(--azul);color:var(--azul);border-radius:8px;padding:5px 10px;font-family:Inter,sans-serif;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="editarClienteUI('${c.nombre.replace(/'/g,"\\'")}')">✏️</button>
       <button class="btn-eliminar-conductor" onclick="eliminarClienteUI('${c.nombre.replace(/'/g,"\\'")}')">✕</button>
     </div>`).join('');
 }
+let _condEditando = null;
+let _cliEditando = null;
+
+function editarConductorUI(nombre) {
+  if (!PINES[nombre]) return;
+  _condEditando = nombre;
+  document.getElementById('edit-cond-nombre').value = nombre;
+  document.getElementById('edit-cond-pin').value = PINES[nombre];
+  document.getElementById('modal-editar-conductor').style.display = 'flex';
+}
+function cerrarModalEditarConductor() {
+  document.getElementById('modal-editar-conductor').style.display = 'none';
+  _condEditando = null;
+}
+async function guardarEdicionConductor() {
+  const viejo = _condEditando;
+  if (!viejo || !PINES[viejo]) return;
+  const nuevo = document.getElementById('edit-cond-nombre').value.trim();
+  const pin = document.getElementById('edit-cond-pin').value.trim();
+  const pinViejo = PINES[viejo];
+  if (!nuevo) { toast('Escribe el nombre del conductor', 'err'); return; }
+  if (!/^[0-9]{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos', 'err'); return; }
+  if (pin === '1994') { toast('Ese PIN está reservado', 'err'); return; }
+  if (Object.keys(PINES).some(n => n !== viejo && n.toLowerCase() === nuevo.toLowerCase())) { toast('Ya existe un conductor con ese nombre', 'err'); return; }
+  if (Object.entries(PINES).some(([n, p]) => n !== viejo && n !== 'admin' && p === pin)) { toast('Ese PIN ya lo usa otro conductor', 'err'); return; }
+  if (nuevo === viejo && pin === pinViejo) { cerrarModalEditarConductor(); return; }
+
+  const btn = document.getElementById('btn-guardar-conductor');
+  if (btn) btn.disabled = true;
+  try {
+    const filtroViejo = '?nombre=eq.' + encodeURIComponent(viejo);
+    const ok = await sbFetch('conductores', 'PATCH', { nombre: nuevo, pin }, filtroViejo);
+    // Comprobar que de verdad se guardó (un PATCH sin filas afectadas también devuelve "ok")
+    const v = await sbFetch('conductores', 'GET', null, '?nombre=eq.' + encodeURIComponent(nuevo) + '&select=nombre,pin');
+    if (!ok || !Array.isArray(v) || v.length !== 1 || v[0].pin !== pin) {
+      toast('⚠️ No se pudo guardar el cambio. Pulsa Actualizar y comprueba el conductor.', 'err');
+      return;
+    }
+    const cambiaNombre = nuevo !== viejo;
+    const avisos = [];
+    if (cambiaNombre) {
+      // Primero las rutas actuales: sin esto el conductor no vería sus rutas con el nombre nuevo
+      const okRutas = await sbFetch('rutas_activas', 'PATCH', { conductor: nuevo }, '?conductor=eq.' + encodeURIComponent(viejo));
+      if (!okRutas) {
+        await sbFetch('conductores', 'PATCH', { nombre: viejo, pin: pinViejo }, '?nombre=eq.' + encodeURIComponent(nuevo)); // deshacer
+        toast('⚠️ No se pudieron actualizar sus rutas. No se ha cambiado nada.', 'err');
+        return;
+      }
+      for (const tabla of ['historial_rutas', 'registros', 'incidencias', 'fotos']) {
+        const r = await sbFetch(tabla, 'PATCH', { conductor: nuevo }, '?conductor=eq.' + encodeURIComponent(viejo));
+        if (!r) avisos.push(tabla);
+      }
+      delete PINES[viejo];
+      rutasActivas.forEach(r => { if (r.conductor === viejo) r.conductor = nuevo; });
+      incidencias.forEach(i => { if (i.conductor === viejo) i.conductor = nuevo; });
+    }
+    PINES[nuevo] = pin;
+    cerrarModalEditarConductor();
+    actualizarSelectsConductores();
+    renderAdmin();
+    if (avisos.length) toast('⚠️ Guardado, pero no se pudo actualizar el nombre en: ' + avisos.join(', '), 'err');
+    else toast(cambiaNombre ? `✓ Conductor renombrado a "${nuevo}"` : `✓ PIN de "${nuevo}" actualizado`);
+  } catch (e) {
+    console.error('[CONDUCTOR] Error editando:', e);
+    toast('⚠️ Error de conexión. Pulsa Actualizar y comprueba el cambio.', 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function editarClienteUI(nombre) {
+  const c = clientesGuardados.find(x => x.nombre === nombre);
+  if (!c) return;
+  _cliEditando = nombre;
+  document.getElementById('edit-cli-nombre').value = c.nombre;
+  document.getElementById('edit-cli-dir').value = c.direccion || '';
+  document.getElementById('modal-editar-cliente').style.display = 'flex';
+}
+function cerrarModalEditarCliente() {
+  document.getElementById('modal-editar-cliente').style.display = 'none';
+  _cliEditando = null;
+}
+async function guardarEdicionCliente() {
+  const viejo = _cliEditando;
+  const cli = clientesGuardados.find(x => x.nombre === viejo);
+  if (!viejo || !cli) return;
+  const nuevo = document.getElementById('edit-cli-nombre').value.trim();
+  const dir = document.getElementById('edit-cli-dir').value.trim();
+  if (!nuevo) { toast('Escribe el nombre del cliente', 'err'); return; }
+  if (clientesGuardados.some(x => x.nombre !== viejo && x.nombre.toLowerCase() === nuevo.toLowerCase())) { toast('Ya existe un cliente con ese nombre', 'err'); return; }
+  if (nuevo === viejo && dir === (cli.direccion || '')) { cerrarModalEditarCliente(); return; }
+
+  const btn = document.getElementById('btn-guardar-cliente');
+  if (btn) btn.disabled = true;
+  try {
+    const ok = await sbFetch('clientes', 'PATCH', { nombre: nuevo, direccion: dir }, '?nombre=eq.' + encodeURIComponent(viejo));
+    const v = await sbFetch('clientes', 'GET', null, '?nombre=eq.' + encodeURIComponent(nuevo) + '&select=nombre,direccion');
+    if (!ok || !Array.isArray(v) || v.length !== 1 || (v[0].direccion || '') !== dir) {
+      toast('⚠️ No se pudo guardar el cambio. Pulsa Actualizar y comprueba el cliente.', 'err');
+      return;
+    }
+    cli.nombre = nuevo;
+    cli.direccion = dir;
+    cerrarModalEditarCliente();
+    renderConfigClientes();
+    toast(`✓ Cliente "${nuevo}" actualizado`);
+  } catch (e) {
+    console.error('[CLIENTE] Error editando:', e);
+    toast('⚠️ Error de conexión. Pulsa Actualizar y comprueba el cambio.', 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function renderConfig() { renderConfigConductores(); renderConfigClientes(); }
 
 async function marcarIncidenciaGestionada(id) {
