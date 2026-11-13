@@ -45,7 +45,7 @@
   .btn-salir { background:none; border:1px solid var(--gris-borde); color:var(--blanco-suave); border-radius:8px; padding:6px 12px; font-size:12px; cursor:pointer; font-family:'Inter',sans-serif; flex-shrink:0; }
   .btn-sync { background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:var(--azul); border-radius:8px; padding:6px 12px; font-size:11px; cursor:pointer; font-family:'Inter',sans-serif; font-weight:600; flex-shrink:0; }
 
-  #pantalla-conductor, #pantalla-admin { display:none; padding-bottom:40px; }
+  #pantalla-conductor, #pantalla-admin, #pantalla-mecanico { display:none; padding-bottom:40px; }
   .seccion { padding:18px 20px 0; }
   .seccion-titulo { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--blanco-suave); margin-bottom:14px; }
 
@@ -279,6 +279,26 @@
     .admin-topbar { flex-wrap: wrap; gap: 8px; }
     .ruta-nombre-tag, .ruta-fecha-tag, .ruta-hora-tag { font-size: 10px; }
   }
+
+  /* ── Módulo de mecánicos ── */
+  .mec-resumen { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+  .mec-card { background:var(--gris-oscuro); border:1px solid var(--gris-borde); border-radius:12px; padding:14px; margin-bottom:10px; display:flex; flex-direction:column; gap:8px; }
+  .mec-matricula { background:var(--gris-medio); border-radius:6px; padding:3px 8px; font-size:12px; font-weight:700; letter-spacing:.5px; white-space:nowrap; }
+  .mec-tipo { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#60a5fa; }
+  .mec-chip { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .mec-chip.verde { background:rgba(34,197,94,.15); color:#4ade80; }
+  .mec-chip.amarillo { background:rgba(245,158,11,.15); color:#fbbf24; }
+  .mec-chip.rojo { background:rgba(239,68,68,.15); color:#f87171; }
+  .mec-chip.gris { background:var(--gris-medio); color:var(--blanco-suave); }
+  .mec-btn-opt { min-height:44px; padding:0 14px; border-radius:22px; border:1px solid var(--gris-borde); background:var(--gris-oscuro); color:var(--blanco-suave); font-family:'Inter',sans-serif; font-size:13px; font-weight:600; cursor:pointer; }
+  .mec-btn-opt.sel { border-color:var(--azul); background:rgba(59,130,246,.18); color:#93c5fd; font-weight:700; }
+  .mec-btn-opt.sel-verde { border-color:var(--verde); background:rgba(34,197,94,.15); color:#4ade80; font-weight:700; }
+  .mec-btn-opt.sel-amarillo { border-color:var(--amarillo); background:rgba(245,158,11,.15); color:#fbbf24; font-weight:700; }
+  .mec-btn-opt.sel-rojo { border-color:var(--rojo); background:rgba(239,68,68,.15); color:#f87171; font-weight:700; }
+  .mec-acciones { padding:6px 0 0; display:flex; flex-direction:column; gap:10px; }
+  .mec-btn-sec { height:48px; width:100%; border-radius:10px; border:1px solid var(--azul); background:none; color:#93c5fd; font-family:'Inter',sans-serif; font-size:15px; font-weight:700; cursor:pointer; }
+  .mec-btn-prim { height:48px; width:100%; border-radius:10px; border:none; background:var(--verde); color:#0f1117; font-family:'Inter',sans-serif; font-size:15px; font-weight:800; cursor:pointer; }
+  .mec-campo { margin-bottom:18px; }
 </style>
 </head>
 <body>
@@ -343,6 +363,97 @@
   </div>
 </div>
 
+<!-- MECÁNICO -->
+<div id="pantalla-mecanico">
+  <div class="topbar">
+    <div>
+      <div class="topbar-rol">Mecánico</div>
+      <div class="topbar-nombre" id="mec-nombre"></div>
+      <div class="topbar-fecha" id="mec-fecha"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-sync" onclick="recargarDatos()">⟳ Actualizar</button>
+      <button class="btn-salir" onclick="salir()">Salir</button>
+    </div>
+  </div>
+  <div class="seccion" style="margin-top:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
+      <div class="seccion-titulo" style="margin-bottom:0">Mi parte de hoy</div>
+      <div id="mec-estado-parte"></div>
+    </div>
+    <div class="mec-resumen" id="mec-resumen"></div>
+    <div id="mec-lista"></div>
+    <div class="mec-acciones">
+      <button class="mec-btn-sec" onclick="abrirFormTrabajo()">+ Añadir trabajo</button>
+      <button class="mec-btn-prim" id="btn-enviar-parte" onclick="enviarParteDelDia()">Enviar parte del día</button>
+    </div>
+  </div>
+</div>
+
+<div id="mec-form-overlay" style="display:none;position:fixed;inset:0;z-index:300;background:var(--negro);overflow-y:auto">
+  <div style="max-width:560px;margin:0 auto;padding:14px 20px 48px">
+    <button class="btn-salir" onclick="cerrarFormTrabajo()" style="margin-bottom:10px">← Volver al parte</button>
+    <div style="font-size:22px;font-weight:800">Añadir trabajo</div>
+    <div class="topbar-fecha" id="mf-subtitulo" style="margin-bottom:18px"></div>
+
+    <div class="mec-campo">
+      <label class="label" for="mf-matricula">Vehículo</label>
+      <div id="mf-veh" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
+      <input type="text" id="mf-matricula" list="mf-matriculas" placeholder="Matrícula (ej: 1234 ABC)" autocomplete="off" autocapitalize="characters" oninput="mfMatriculaInput()">
+      <datalist id="mf-matriculas"></datalist>
+    </div>
+
+    <div class="mec-campo">
+      <div class="label">Tipo de trabajo</div>
+      <div id="mf-tipos" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+
+    <div class="mec-campo">
+      <label class="label" for="mf-descripcion">Qué has hecho</label>
+      <textarea id="mf-descripcion" rows="4" placeholder="Describe el trabajo realizado..." style="min-height:100px;font-size:15px"></textarea>
+    </div>
+
+    <div class="mec-campo" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <div>
+        <label class="label" for="mf-horas">Horas</label>
+        <input type="text" id="mf-horas" inputmode="numeric" maxlength="2" placeholder="0" style="text-align:center;font-weight:800">
+      </div>
+      <div>
+        <label class="label" for="mf-minutos">Minutos</label>
+        <input type="text" id="mf-minutos" inputmode="numeric" maxlength="2" placeholder="0" style="text-align:center;font-weight:800">
+      </div>
+    </div>
+
+    <div class="mec-campo">
+      <label class="label" for="mf-km">Kilómetros u horas de motor (opcional)</label>
+      <input type="text" id="mf-km" inputmode="numeric" placeholder="Opcional">
+    </div>
+
+    <div class="mec-campo">
+      <div class="label">Piezas y materiales</div>
+      <div id="mf-piezas"></div>
+      <button type="button" class="mec-btn-opt" style="width:100%;border-style:dashed;border-radius:10px" onclick="mfAddPieza()">+ Añadir pieza</button>
+    </div>
+
+    <div class="mec-campo">
+      <div class="label">Cómo queda el vehículo</div>
+      <div id="mf-estados" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+
+    <div class="mec-campo">
+      <div class="label">Fotos (opcional)</div>
+      <input type="file" id="mf-fotos-input" accept="image/*" multiple style="display:none" onchange="mfAñadirFotos(this)">
+      <button type="button" class="mec-btn-opt" style="width:100%;height:72px;border:2px dashed var(--gris-borde);border-radius:12px" onclick="document.getElementById('mf-fotos-input').click()">📷 Añadir fotos (puedes elegir varias)</button>
+      <div id="mf-fotos-lista"></div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button type="button" class="mec-btn-opt" style="flex:1;height:48px;border-radius:10px" onclick="cerrarFormTrabajo()">Cancelar</button>
+      <button type="button" class="btn btn-azul" id="mf-guardar" style="flex:2;margin-top:0;padding:0;height:48px" onclick="guardarTrabajoTaller()">Guardar trabajo</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADMIN -->
 <div id="pantalla-admin">
   <div class="admin-topbar">
@@ -361,6 +472,7 @@
     <div class="tab" onclick="cambiarTab(1,this)">📋 Registro</div>
     <div class="tab" onclick="cambiarTab(2,this)">🗺️ Rutas</div>
     <div class="tab" onclick="cambiarTab(3,this)">⚠️ Incidencias</div>
+    <div class="tab" onclick="cambiarTab(5,this)">🔧 Mecánicos</div>
     <div class="tab" onclick="cambiarTab(4,this)">⚙️ Config</div>
   </div>
 
@@ -451,6 +563,31 @@
     <div id="lista-incidencias"></div>
   </div>
 
+  <div class="tab-contenido" id="tab-5">
+    <div class="form-nuevo" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <div style="flex:1 1 140px"><label class="label" for="mt-desde">Desde</label><input type="date" id="mt-desde" onchange="renderMecanicosAdmin()"></div>
+      <div style="flex:1 1 140px"><label class="label" for="mt-hasta">Hasta</label><input type="date" id="mt-hasta" onchange="renderMecanicosAdmin()"></div>
+      <div style="flex:1 1 140px"><label class="label" for="mt-mecanico">Mecánico</label><select id="mt-mecanico" onchange="renderMecanicosAdmin()"><option value="">Todos</option></select></div>
+      <div style="flex:1 1 140px"><label class="label" for="mt-matricula">Matrícula</label><input type="text" id="mt-matricula" placeholder="Buscar..." oninput="renderMecanicosAdmin()"></div>
+      <div style="flex:1 1 160px"><label class="label" for="mt-estado">Estado</label><select id="mt-estado" onchange="renderMecanicosAdmin()"><option value="">Todos</option><option value="operativo">Operativo</option><option value="pendiente">Pendiente de pieza</option><option value="inmovilizado">Inmovilizado</option></select></div>
+      <button class="btn-añadir" onclick="exportarMecanicosCSV()">⬇ Exportar a Excel</button>
+    </div>
+    <div class="resumen-stats" id="mt-stats" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+      <div style="flex:999 1 560px;min-width:0">
+        <div class="config-seccion-titulo">Trabajos</div>
+        <div class="tabla-wrap" id="mt-tabla"></div>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="config-seccion-titulo" id="mt-titulo-partes">Partes de hoy</div>
+        <div id="mt-partes"></div>
+        <div class="config-seccion-titulo" style="margin-top:20px">Vehículos con trabajo pendiente</div>
+        <div id="mt-pendientes"></div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--blanco-suave);margin-top:14px">Se cargan los últimos 90 días.</div>
+  </div>
+
   <div class="tab-contenido" id="tab-4">
     <div class="config-seccion">
       <div class="config-seccion-titulo">🔄 Reseteo diario</div>
@@ -465,6 +602,23 @@
     <div class="config-seccion">
       <div class="config-seccion-titulo">📅 Google Calendar</div>
       <div class="cal-info">Cada ruta crea un evento en Calendar con todas sus paradas. Se actualiza automáticamente al registrar horas.<br><br><strong>Para buscar quién estuvo en un cliente concreto</strong>, usa Google Sheets — es más rápido.</div>
+    </div>
+
+    <div class="config-seccion">
+      <div class="config-seccion-titulo">🔧 Gestión de mecánicos</div>
+      <div class="form-nuevo">
+        <h4>➕ Añadir mecánico nuevo</h4>
+        <div style="margin-bottom:8px">
+          <label class="label">Nombre completo</label>
+          <input type="text" id="nuevo-mec-nombre" placeholder="Ej: Pedro Gómez">
+        </div>
+        <div class="fila-3col">
+          <div><label class="label">PIN (4 dígitos)</label><input type="text" id="nuevo-mec-pin" placeholder="Ej: 2011" maxlength="4"></div>
+          <div></div>
+          <button class="btn-añadir" onclick="añadirMecanicoUI()">Añadir</button>
+        </div>
+      </div>
+      <div id="lista-mecanicos-config"></div>
     </div>
 
     <div class="config-seccion">
@@ -573,6 +727,26 @@
     <div class="modal-btns">
       <button class="btn-modal-cancel" onclick="cerrarModalEditarCliente()">Cancelar</button>
       <button class="btn-modal-ok" id="btn-guardar-cliente" onclick="guardarEdicionCliente()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR MECÁNICO -->
+<div class="modal-overlay" id="modal-editar-mecanico">
+  <div class="modal">
+    <div class="modal-titulo">✏️ Editar mecánico</div>
+    <div class="modal-subtitulo">Si cambias el nombre, también se actualiza en sus partes. Si tiene la app abierta, tendrá que salir y volver a entrar.</div>
+    <div style="margin-bottom:10px">
+      <label class="label">Nombre</label>
+      <input type="text" id="edit-mec-nombre" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div>
+      <label class="label">PIN (4 dígitos)</label>
+      <input type="text" id="edit-mec-pin" maxlength="4" inputmode="numeric" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-modal-cancel" onclick="cerrarModalEditarMecanico()">Cancelar</button>
+      <button class="btn-modal-ok" id="btn-guardar-mecanico" onclick="guardarEdicionMecanico()">💾 Guardar</button>
     </div>
   </div>
 </div>
@@ -783,6 +957,10 @@ async function subirFotoCloudinary(base64, carpeta, nombreArchivo) {
 // ══════════════════════════════════════════
 let usuarioActual = null;
 let PINES = { 'admin': '1994' }; // Admin siempre disponible
+let PINES_MEC = {};            // mecánicos: nombre → PIN
+let misTrabajos = [];          // trabajos de hoy del mecánico que ha entrado
+let trabajosTaller = [];       // (administración) trabajos de los últimos 90 días
+let matriculasConocidas = [];  // matrículas ya usadas, para sugerirlas
 let clientesGuardados = [];
 let rutasActivas = [];
 let incidencias = [];
@@ -931,15 +1109,18 @@ function getRutaId(ri) {
 async function cargarTodo(mostrarLoading) {
   if (mostrarLoading) document.getElementById('loading-overlay').style.display='flex';
   try {
-    const [conductoresData, clientesData, rutasData, incidenciasData] = await Promise.all([
+    const [conductoresData, clientesData, rutasData, incidenciasData, mecanicosData] = await Promise.all([
       sbFetch('conductores', 'GET', null, '?select=nombre,pin&order=nombre'),
       sbFetch('clientes', 'GET', null, '?select=nombre,direccion,devuelve_palets&order=nombre'),
       sbFetch('rutas_activas', 'GET', null, '?select=*&order=fecha_servicio.asc,orden.asc,hora_inicio.asc,created_at.asc'),
-      sbFetch('incidencias', 'GET', null, '?select=*&order=gestionada.asc,created_at.desc&limit=200')
+      sbFetch('incidencias', 'GET', null, '?select=*&order=gestionada.asc,created_at.desc&limit=200'),
+      sbFetch('mecanicos', 'GET', null, '?select=nombre,pin&order=nombre')
     ]);
 
     PINES = { 'admin': '1994' };
     (conductoresData||[]).forEach(c => PINES[c.nombre] = c.pin);
+    PINES_MEC = {};
+    (Array.isArray(mecanicosData) ? mecanicosData : []).forEach(m => PINES_MEC[m.nombre] = m.pin);
 
     clientesGuardados = (clientesData||[]).map(c => ({
       nombre: c.nombre,
@@ -1004,15 +1185,13 @@ async function cargarTodo(mostrarLoading) {
   }
   if (mostrarLoading) document.getElementById('loading-overlay').style.display='none';
   actualizarSelectsConductores();
-  if (usuarioActual === 'admin') renderAdmin();
-  else if (usuarioActual) renderConductor(usuarioActual);
+  refrescarVista();
 }
 
 async function recargarDatos() {
   toast('Sincronizando...');
   await cargarTodo(false);
-  if (usuarioActual === 'admin') renderAdmin();
-  else if (usuarioActual) renderConductor(usuarioActual);
+  refrescarVista();
   toast('✓ Datos actualizados');
 }
 
@@ -1047,7 +1226,9 @@ function listaConductores() { return Object.keys(PINES).filter(k => k !== 'admin
 function actualizarSelectsConductores() {
   const opciones = listaConductores().map(n => `<option>${n}</option>`).join('');
   const sel = document.getElementById('select-conductor');
-  sel.innerHTML = '<option value="">— Selecciona tu nombre —</option><option value="admin">👤 ADMINISTRACIÓN</option>' + opciones;
+  const nombresMec = Object.keys(PINES_MEC).sort((a, b) => a.localeCompare(b, 'es'));
+  const opcionesMec = nombresMec.length ? '<optgroup label="Mecánicos">' + nombresMec.map(n => `<option>${escHtml(n)}</option>`).join('') + '</optgroup>' : '';
+  sel.innerHTML = '<option value="">— Selecciona tu nombre —</option><option value="admin">👤 ADMINISTRACIÓN</option>' + opciones + opcionesMec;
   const selAdmin = document.getElementById('admin-select-conductor');
   if (selAdmin) selAdmin.innerHTML = '<option value="">— Selecciona —</option>' + opciones;
   const selModal = document.getElementById('modal-conductor-nuevo');
@@ -1079,7 +1260,8 @@ function pinPulsar(num) {
 function pinBorrar() { pinActual = pinActual.slice(0,-1); actualizarDots(); document.getElementById('pin-error').textContent=''; }
 function actualizarDots() { for(let i=0;i<4;i++){ const d=document.getElementById('pd'+i); if(d) d.classList.toggle('lleno', i<pinActual.length); } }
 function validarPin() {
-  if (pinActual === PINES[pinUsuarioSeleccionado]) {
+  const pinEsperado = PINES[pinUsuarioSeleccionado] !== undefined ? PINES[pinUsuarioSeleccionado] : PINES_MEC[pinUsuarioSeleccionado];
+  if (pinEsperado !== undefined && pinActual === pinEsperado) {
     entrar(pinUsuarioSeleccionado);
   } else {
     document.getElementById('pin-error').textContent = '❌ PIN incorrecto';
@@ -1101,6 +1283,13 @@ async function entrar(val) {
     document.getElementById('reset-fecha').value = fechaInputHoy();
     initParadas();
     renderAdmin();
+    const mtd = document.getElementById('mt-desde');
+    if (mtd) { mtd.value = fechaIsoLocal(); document.getElementById('mt-hasta').value = fechaIsoLocal(); }
+  } else if (PINES_MEC[val] !== undefined) {
+    document.getElementById('mec-nombre').textContent = val;
+    document.getElementById('mec-fecha').textContent = fechaActual();
+    document.getElementById('pantalla-mecanico').style.display='block';
+    cargarTrabajosMecanico();
   } else {
     document.getElementById('topbar-nombre').textContent = val;
     document.getElementById('topbar-fecha').textContent = fechaActual();
@@ -1117,6 +1306,8 @@ function salir() {
   document.getElementById('paso-pin').style.display='none';
   document.getElementById('pantalla-conductor').style.display='none';
   document.getElementById('pantalla-admin').style.display='none';
+  document.getElementById('pantalla-mecanico').style.display='none';
+  cerrarFormTrabajo();
   document.getElementById('select-conductor').value='';
 }
 
@@ -1130,6 +1321,7 @@ function cambiarTab(idx, el) {
   if(idx===2) renderRutasCreadas();
   if(idx===3) renderIncidencias();
   if(idx===4) renderConfig();
+  if(idx===5) cargarTrabajosAdmin();
 }
 
 // ══════════════════════════════════════════
@@ -2312,7 +2504,7 @@ async function añadirConductorUI() {
   const pin = document.getElementById('nuevo-conductor-pin').value.trim();
   if (!nombre) { toast('Escribe el nombre del conductor','err'); return; }
   if (!/^[0-9]{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos','err'); return; }
-  if (PINES[nombre]) { toast('Ya existe un conductor con ese nombre','err'); return; }
+  if (PINES[nombre] || PINES_MEC[nombre] !== undefined) { toast('Ya existe un usuario con ese nombre','err'); return; }
   if (Object.values(PINES).filter(p=>p!=='1994').includes(pin)) { toast('Ese PIN ya está en uso','err'); return; }
   PINES[nombre] = pin;
   await sbFetch('conductores', 'POST', {nombre, pin});
@@ -2415,7 +2607,7 @@ async function guardarEdicionConductor() {
   if (!nuevo) { toast('Escribe el nombre del conductor', 'err'); return; }
   if (!/^[0-9]{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos', 'err'); return; }
   if (pin === '1994') { toast('Ese PIN está reservado', 'err'); return; }
-  if (Object.keys(PINES).some(n => n !== viejo && n.toLowerCase() === nuevo.toLowerCase())) { toast('Ya existe un conductor con ese nombre', 'err'); return; }
+  if (Object.keys(PINES).some(n => n !== viejo && n.toLowerCase() === nuevo.toLowerCase()) || Object.keys(PINES_MEC).some(n => n.toLowerCase() === nuevo.toLowerCase())) { toast('Ya existe un usuario con ese nombre', 'err'); return; }
   if (Object.entries(PINES).some(([n, p]) => n !== viejo && n !== 'admin' && p === pin)) { toast('Ese PIN ya lo usa otro conductor', 'err'); return; }
   if (nuevo === viejo && pin === pinViejo) { cerrarModalEditarConductor(); return; }
 
@@ -2506,7 +2698,428 @@ async function guardarEdicionCliente() {
   }
 }
 
-function renderConfig() { renderConfigConductores(); renderConfigClientes(); }
+/*MEC_INICIO*/
+// ══════════════════════════════════════════
+// MÓDULO DE MECÁNICOS — parte de trabajo diario
+// ══════════════════════════════════════════
+const TIPOS_TRABAJO = ['Mantenimiento', 'Avería', 'Neumáticos', 'Frenos', 'Equipo de frío', 'Eléctrico', 'Revisión / ITV', 'Otros'];
+const ESTADOS_TALLER = { operativo: 'Operativo', pendiente: 'Pendiente de pieza', inmovilizado: 'Inmovilizado' };
+let _mecEditando = null;
+let _guardandoTrabajo = false;
+let mfVehTipo = 'Tractora', mfTipo = '', mfEstado = 'operativo', mfFotos = [], mfPiezas = [];
+
+function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+function jsArg(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+function fechaIsoLocal(d) { d = d || new Date(); const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+function fechaIsoAEs(iso) { if (!iso) return ''; const [y, m, d] = String(iso).split('-'); return d + '/' + m + '/' + y; }
+function listaMecanicos() { return Object.keys(PINES_MEC).sort((a, b) => a.localeCompare(b, 'es')); }
+function minTrabajo(t) { return t.minutos_total != null ? t.minutos_total : (t.horas || 0) * 60 + (t.minutos || 0); }
+function fmtMin(min) { min = Math.max(0, Math.round(min || 0)); const h = Math.floor(min / 60), m = min % 60; if (h && m) return h + ' h ' + m + ' min'; if (h) return h + ' h'; return m + ' min'; }
+function piezasTexto(piezas) { return (Array.isArray(piezas) ? piezas : []).filter(p => p && p.pieza).map(p => p.pieza + ' × ' + (p.cantidad || 1)).join(', '); }
+function horaDeIso(iso) { try { return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+function chipTexto(texto, color) { return '<span class="mec-chip ' + color + '">' + escHtml(texto) + '</span>'; }
+function chipEstado(est) { return chipTexto(ESTADOS_TALLER[est] || est, est === 'operativo' ? 'verde' : est === 'pendiente' ? 'amarillo' : 'rojo'); }
+function valorCampo(id) { const el = document.getElementById(id); return el ? String(el.value || '') : ''; }
+
+// ---------- Vista del mecánico ----------
+async function cargarTrabajosMecanico() {
+  if (!usuarioActual || PINES_MEC[usuarioActual] === undefined) return;
+  try {
+    const filas = await sbFetch('trabajos_taller', 'GET', null, '?mecanico=eq.' + encodeURIComponent(usuarioActual) + '&fecha=eq.' + fechaIsoLocal() + '&select=*&order=created_at.asc');
+    if (Array.isArray(filas)) misTrabajos = filas;
+    else toast('No se pudieron cargar tus trabajos. Pulsa Actualizar.', 'err');
+  } catch (e) { console.error('[TALLER] Error cargando trabajos:', e); toast('No se pudieron cargar tus trabajos. Pulsa Actualizar.', 'err'); }
+  renderMecanico();
+  try {
+    const m = await sbFetch('trabajos_taller', 'GET', null, '?select=matricula,vehiculo_tipo&order=created_at.desc&limit=600');
+    if (Array.isArray(m)) {
+      const vistos = {}; matriculasConocidas = [];
+      m.forEach(x => { const k = String(x.matricula || '').toUpperCase(); if (k && !vistos[k]) { vistos[k] = 1; matriculasConocidas.push({ matricula: k, tipo: x.vehiculo_tipo }); } });
+    }
+  } catch (e) { /* las sugerencias de matrícula son opcionales */ }
+}
+
+function tarjetaTrabajo(t, conBorrar) {
+  const piezas = piezasTexto(t.piezas);
+  const nFotos = Array.isArray(t.fotos) ? t.fotos.length : 0;
+  return `<div class="mec-card">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="mec-matricula">${escHtml(t.matricula)}</span>
+      <span style="font-size:12px;color:var(--blanco-suave)">${escHtml(t.vehiculo_tipo)}</span>
+      <span style="margin-left:auto;font-size:13px;font-weight:700">${fmtMin(minTrabajo(t))}</span>
+    </div>
+    <div class="mec-tipo">${escHtml(t.tipo)}</div>
+    <div style="font-size:14px;line-height:1.4">${escHtml(t.descripcion)}</div>
+    ${piezas ? `<div style="font-size:12px;color:var(--blanco-suave)">Piezas: ${escHtml(piezas)}</div>` : ''}
+    ${nFotos ? `<div style="font-size:12px;color:var(--blanco-suave)">${nFotos} foto${nFotos === 1 ? '' : 's'} adjunta${nFotos === 1 ? '' : 's'}</div>` : ''}
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${chipEstado(t.estado_final)}${t.enviado ? chipTexto('Enviado', 'gris') : ''}
+      ${conBorrar && !t.enviado ? `<button style="margin-left:auto;background:none;border:1px solid var(--gris-borde);color:var(--blanco-suave);border-radius:8px;padding:6px 12px;font-family:Inter,sans-serif;font-size:12px;cursor:pointer" onclick="eliminarTrabajoTaller('${escHtml(jsArg(t.id))}')">Eliminar</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderMecanico() {
+  const lista = document.getElementById('mec-lista');
+  if (!lista) return;
+  const total = misTrabajos.reduce((a, t) => a + minTrabajo(t), 0);
+  const pendientes = misTrabajos.filter(t => t.estado_final !== 'operativo').length;
+  const sinEnviar = misTrabajos.filter(t => !t.enviado);
+  document.getElementById('mec-resumen').innerHTML = `
+    <div class="stat-card"><div class="stat-numero stat-azul">${misTrabajos.length}</div><div class="stat-label">Trabajos</div></div>
+    <div class="stat-card"><div class="stat-numero" style="font-size:18px">${fmtMin(total)}</div><div class="stat-label">Tiempo total</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--amarillo)">${pendientes}</div><div class="stat-label">Pendientes</div></div>`;
+  let badge;
+  if (!misTrabajos.length) badge = chipTexto('Sin trabajos', 'gris');
+  else if (sinEnviar.length) badge = chipTexto('Borrador', 'amarillo');
+  else {
+    const ult = misTrabajos.map(t => t.enviado_a).filter(Boolean).sort().pop();
+    badge = chipTexto('Enviado' + (ult ? ' a las ' + horaDeIso(ult) : ''), 'verde');
+  }
+  document.getElementById('mec-estado-parte').innerHTML = badge;
+  lista.innerHTML = misTrabajos.length ? misTrabajos.map(t => tarjetaTrabajo(t, true)).join('') : '<div class="empty-state">Todavía no has añadido ningún trabajo hoy.</div>';
+  const btn = document.getElementById('btn-enviar-parte');
+  if (btn) {
+    btn.disabled = !sinEnviar.length;
+    btn.style.opacity = sinEnviar.length ? '1' : '.45';
+    btn.textContent = sinEnviar.length ? 'Enviar parte del día' : (misTrabajos.length ? 'Parte enviado' : 'Enviar parte del día');
+  }
+}
+
+// ---------- Formulario "Añadir trabajo" ----------
+function abrirFormTrabajo() {
+  mfVehTipo = 'Tractora'; mfTipo = ''; mfEstado = 'operativo'; mfFotos = []; mfPiezas = [{ pieza: '', cantidad: '1' }];
+  ['mf-matricula', 'mf-descripcion', 'mf-horas', 'mf-minutos', 'mf-km'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const dl = document.getElementById('mf-matriculas');
+  if (dl) dl.innerHTML = matriculasConocidas.map(m => `<option value="${escHtml(m.matricula)}"></option>`).join('');
+  const sub = document.getElementById('mf-subtitulo');
+  if (sub) sub.textContent = 'Parte del ' + fechaActual() + ' · ' + usuarioActual;
+  mfRender();
+  const ov = document.getElementById('mec-form-overlay');
+  ov.style.display = 'block'; ov.scrollTop = 0;
+}
+function cerrarFormTrabajo() { const ov = document.getElementById('mec-form-overlay'); if (ov) ov.style.display = 'none'; }
+function mfOpcion(texto, seleccionada, onclick, extra) { return `<button type="button" class="mec-btn-opt${seleccionada ? ' sel' + (extra || '') : ''}" aria-pressed="${seleccionada ? 'true' : 'false'}" onclick="${onclick}">${escHtml(texto)}</button>`; }
+function mfRender() {
+  document.getElementById('mf-veh').innerHTML = ['Tractora', 'Remolque', 'Otro'].map(v => mfOpcion(v, mfVehTipo === v, `mfElegirVeh('${v}')`)).join('');
+  document.getElementById('mf-tipos').innerHTML = TIPOS_TRABAJO.map((t, i) => mfOpcion(t, mfTipo === t, `mfElegirTipo(${i})`)).join('');
+  document.getElementById('mf-estados').innerHTML =
+    mfOpcion('Operativo', mfEstado === 'operativo', "mfElegirEstado('operativo')", '-verde') +
+    mfOpcion('Pendiente de pieza', mfEstado === 'pendiente', "mfElegirEstado('pendiente')", '-amarillo') +
+    mfOpcion('Inmovilizado', mfEstado === 'inmovilizado', "mfElegirEstado('inmovilizado')", '-rojo');
+  mfRenderPiezas(); mfRenderFotos();
+}
+function mfElegirVeh(v) { mfVehTipo = v; mfRender(); }
+function mfElegirTipo(i) { mfTipo = TIPOS_TRABAJO[i] || ''; mfRender(); }
+function mfElegirEstado(e) { mfEstado = e; mfRender(); }
+function mfMatriculaInput() {
+  const k = valorCampo('mf-matricula').trim().toUpperCase();
+  const conocida = matriculasConocidas.find(m => m.matricula === k);
+  if (conocida && conocida.tipo && conocida.tipo !== mfVehTipo) { mfVehTipo = conocida.tipo; mfRender(); }
+}
+function mfRenderPiezas() {
+  document.getElementById('mf-piezas').innerHTML = mfPiezas.map((p, i) => `
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="text" aria-label="Pieza ${i + 1}" placeholder="Pieza o material" value="${escHtml(p.pieza)}" style="flex:1;min-width:0" oninput="mfSetPieza(${i},'pieza',this.value)">
+      <input type="text" inputmode="numeric" aria-label="Cantidad de la pieza ${i + 1}" value="${escHtml(p.cantidad)}" maxlength="3" style="width:72px;text-align:center" oninput="mfSetPieza(${i},'cantidad',this.value)">
+      <button type="button" aria-label="Quitar pieza ${i + 1}" style="background:none;border:1px solid var(--gris-borde);color:var(--blanco-suave);border-radius:10px;width:44px;cursor:pointer" onclick="mfDelPieza(${i})">✕</button>
+    </div>`).join('');
+}
+function mfSetPieza(i, campo, valor) { if (mfPiezas[i]) mfPiezas[i][campo] = valor; }
+function mfAddPieza() { mfPiezas.push({ pieza: '', cantidad: '1' }); mfRenderPiezas(); }
+function mfDelPieza(i) { mfPiezas.splice(i, 1); if (!mfPiezas.length) mfPiezas.push({ pieza: '', cantidad: '1' }); mfRenderPiezas(); }
+function mfAñadirFotos(input) {
+  if (input && input.files) Array.from(input.files).forEach(f => mfFotos.push(f));
+  if (input) input.value = '';
+  mfRenderFotos();
+}
+function mfQuitarFoto(i) { mfFotos.splice(i, 1); mfRenderFotos(); }
+function mfRenderFotos() {
+  const c = document.getElementById('mf-fotos-lista');
+  if (!c) return;
+  c.innerHTML = mfFotos.map((f, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gris-borde)">
+      <span style="flex:1;font-size:13px;word-break:break-all">📎 ${escHtml(f.name)}</span>
+      <button type="button" aria-label="Quitar foto" style="background:none;border:none;color:var(--rojo);font-size:18px;cursor:pointer;padding:4px 8px" onclick="mfQuitarFoto(${i})">✕</button>
+    </div>`).join('');
+}
+async function subirFotoTaller(file) {
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', CLOUDINARY_PRESET);
+    fd.append('folder', 'Taller_TransControl/' + String(usuarioActual || 'mecanico').replace(/[^A-Za-z0-9_-]/g, '_') + '/' + fechaIsoLocal());
+    const r = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/image/upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    return d.secure_url || '';
+  } catch (e) { return ''; }
+}
+function nuevoUuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch => { const r = Math.random() * 16 | 0; return (ch === 'x' ? r : (r & 3 | 8)).toString(16); });
+}
+async function guardarTrabajoTaller() {
+  if (_guardandoTrabajo) return;
+  const matricula = valorCampo('mf-matricula').trim().toUpperCase();
+  const descripcion = valorCampo('mf-descripcion').trim();
+  const horas = parseInt(valorCampo('mf-horas'), 10) || 0;
+  const minutos = parseInt(valorCampo('mf-minutos'), 10) || 0;
+  const km = valorCampo('mf-km').trim();
+  if (!matricula) { toast('Escribe la matrícula del vehículo', 'err'); return; }
+  if (!mfTipo) { toast('Elige el tipo de trabajo', 'err'); return; }
+  if (!descripcion) { toast('Cuenta qué has hecho', 'err'); return; }
+  if (horas < 0 || horas > 24 || minutos < 0 || minutos > 59) { toast('Revisa el tiempo: horas de 0 a 24 y minutos de 0 a 59', 'err'); return; }
+  if (horas * 60 + minutos === 0) { toast('Indica el tiempo empleado', 'err'); return; }
+  const piezas = mfPiezas.map(p => ({ pieza: String(p.pieza || '').trim(), cantidad: parseInt(p.cantidad, 10) || 1 })).filter(p => p.pieza);
+  _guardandoTrabajo = true;
+  const btn = document.getElementById('mf-guardar');
+  if (btn) { btn.disabled = true; btn.textContent = mfFotos.length ? 'Subiendo fotos...' : 'Guardando...'; }
+  try {
+    const urls = [];
+    for (const f of mfFotos) {
+      const u = await subirFotoTaller(f);
+      if (!u) { toast('⚠️ No se pudo subir una foto. Inténtalo de nuevo.', 'err'); return; }
+      urls.push(u);
+    }
+    const fila = {
+      id: nuevoUuid(), mecanico: usuarioActual, fecha: fechaIsoLocal(), vehiculo_tipo: mfVehTipo, matricula, tipo: mfTipo,
+      descripcion, horas, minutos, km, piezas, estado_final: mfEstado, fotos: urls, enviado: false
+    };
+    const ok = await sbFetch('trabajos_taller', 'POST', fila, '');
+    if (!ok) { toast('⚠️ No se pudo guardar el trabajo. Inténtalo de nuevo.', 'err'); return; }
+    misTrabajos.push(Object.assign({}, fila, { minutos_total: horas * 60 + minutos, created_at: new Date().toISOString() }));
+    cerrarFormTrabajo();
+    renderMecanico();
+    toast('✓ Trabajo añadido al parte');
+  } catch (e) {
+    console.error('[TALLER] Error guardando trabajo:', e);
+    toast('⚠️ Error de conexión. Inténtalo de nuevo.', 'err');
+  } finally {
+    _guardandoTrabajo = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar trabajo'; }
+  }
+}
+async function enviarParteDelDia() {
+  const sinEnviar = misTrabajos.filter(t => !t.enviado);
+  if (!sinEnviar.length) { toast('No hay trabajos nuevos que enviar', 'err'); return; }
+  if (!confirm('¿Enviar el parte del día con ' + sinEnviar.length + ' trabajo' + (sinEnviar.length === 1 ? '' : 's') + '?')) return;
+  const btn = document.getElementById('btn-enviar-parte');
+  if (btn) btn.disabled = true;
+  try {
+    const ok = await sbFetch('trabajos_taller', 'PATCH', { enviado: true, enviado_a: new Date().toISOString() },
+      '?mecanico=eq.' + encodeURIComponent(usuarioActual) + '&fecha=eq.' + fechaIsoLocal() + '&enviado=eq.false');
+    if (ok) toast('✓ Parte enviado'); else toast('⚠️ No se pudo enviar el parte. Inténtalo de nuevo.', 'err');
+  } catch (e) { toast('⚠️ Error de conexión. Inténtalo de nuevo.', 'err'); }
+  await cargarTrabajosMecanico();
+}
+async function eliminarTrabajoTaller(id) {
+  const t = misTrabajos.find(x => x.id === id);
+  if (!t || t.enviado) return;
+  if (!confirm('¿Eliminar este trabajo del parte?')) return;
+  try {
+    const ok = await sbFetch('trabajos_taller', 'DELETE', null, '?id=eq.' + encodeURIComponent(id) + '&enviado=eq.false');
+    if (ok) toast('Trabajo eliminado'); else toast('⚠️ No se pudo eliminar. Inténtalo de nuevo.', 'err');
+  } catch (e) { toast('⚠️ Error de conexión. Inténtalo de nuevo.', 'err'); }
+  await cargarTrabajosMecanico();
+}
+
+// ---------- Administración: pestaña Mecánicos ----------
+async function cargarTrabajosAdmin() {
+  const tabla = document.getElementById('mt-tabla');
+  if (tabla && !trabajosTaller.length) tabla.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const desde = fechaIsoLocal(new Date(Date.now() - 90 * 86400000));
+    const filas = await sbFetch('trabajos_taller', 'GET', null, '?select=*&fecha=gte.' + desde + '&order=fecha.desc,created_at.desc&limit=3000');
+    if (Array.isArray(filas)) trabajosTaller = filas; else toast('No se pudieron cargar los partes. Pulsa Actualizar.', 'err');
+  } catch (e) { console.error('[TALLER] Error cargando partes:', e); toast('No se pudieron cargar los partes. Pulsa Actualizar.', 'err'); }
+  renderMecanicosAdmin();
+}
+function filtrarTrabajosAdmin() {
+  const d = valorCampo('mt-desde'), h = valorCampo('mt-hasta'), mec = valorCampo('mt-mecanico'), est = valorCampo('mt-estado');
+  const mat = valorCampo('mt-matricula').trim().toUpperCase();
+  return trabajosTaller.filter(t => (!d || t.fecha >= d) && (!h || t.fecha <= h) && (!mec || t.mecanico === mec)
+    && (!mat || String(t.matricula || '').toUpperCase().includes(mat)) && (!est || t.estado_final === est));
+}
+function resumenPartesDia(dia) {
+  const nombres = Array.from(new Set([...listaMecanicos(), ...trabajosTaller.filter(t => t.fecha === dia).map(t => t.mecanico)])).sort((a, b) => a.localeCompare(b, 'es'));
+  return nombres.map(n => {
+    const filas = trabajosTaller.filter(t => t.fecha === dia && t.mecanico === n);
+    const todosEnviados = filas.length > 0 && filas.every(t => t.enviado);
+    const ult = filas.map(t => t.enviado_a).filter(Boolean).sort().pop();
+    return { nombre: n, n: filas.length, min: filas.reduce((a, t) => a + minTrabajo(t), 0), estado: !filas.length ? 'sin' : todosEnviados ? 'enviado' : 'borrador', hora: ult ? horaDeIso(ult) : '' };
+  });
+}
+function vehiculosPendientes() {
+  const ord = trabajosTaller.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  const vistos = {}, out = [];
+  ord.forEach(t => { const k = String(t.matricula || '').toUpperCase(); if (!k || vistos[k]) return; vistos[k] = 1; if (t.estado_final !== 'operativo') out.push(t); });
+  return out;
+}
+function renderMecanicosAdmin() {
+  const tabla = document.getElementById('mt-tabla');
+  if (!tabla) return;
+  const sel = document.getElementById('mt-mecanico');
+  const actual = sel.value;
+  const nombres = Array.from(new Set([...listaMecanicos(), ...trabajosTaller.map(t => t.mecanico)])).sort((a, b) => a.localeCompare(b, 'es'));
+  sel.innerHTML = '<option value="">Todos</option>' + nombres.map(n => `<option value="${escHtml(n)}"${n === actual ? ' selected' : ''}>${escHtml(n)}</option>`).join('');
+  const filas = filtrarTrabajosAdmin();
+  const dia = valorCampo('mt-hasta') || fechaIsoLocal();
+  const partes = resumenPartesDia(dia);
+  const enviados = partes.filter(p => p.estado === 'enviado').length;
+  document.getElementById('mt-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-numero stat-azul">${enviados} de ${partes.length}</div><div class="stat-label">Partes enviados (${escHtml(fechaIsoAEs(dia))})</div></div>
+    <div class="stat-card"><div class="stat-numero" style="font-size:20px">${fmtMin(filas.reduce((a, t) => a + minTrabajo(t), 0))}</div><div class="stat-label">Tiempo total (${filas.length} trabajos)</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--amarillo)">${filas.filter(t => t.estado_final === 'pendiente').length}</div><div class="stat-label">Pendiente de pieza</div></div>
+    <div class="stat-card"><div class="stat-numero stat-rojo">${filas.filter(t => t.estado_final === 'inmovilizado').length}</div><div class="stat-label">Inmovilizado</div></div>`;
+  tabla.innerHTML = filas.length ? `<table class="tabla-registro" style="min-width:760px"><thead><tr><th>Fecha</th><th>Mecánico</th><th>Vehículo</th><th>Tipo</th><th>Trabajo realizado</th><th>Tiempo</th><th>Estado</th></tr></thead><tbody>` + filas.map(t => {
+    const piezas = piezasTexto(t.piezas);
+    const fotos = (Array.isArray(t.fotos) ? t.fotos : []).map((u, i) => `<a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--azul)">Foto ${i + 1}</a>`).join(' · ');
+    return `<tr>
+      <td style="white-space:nowrap">${escHtml(fechaIsoAEs(t.fecha))}</td>
+      <td style="font-weight:600">${escHtml(t.mecanico)}</td>
+      <td><span class="mec-matricula">${escHtml(t.matricula)}</span><div style="font-size:11px;color:var(--blanco-suave);margin-top:3px">${escHtml(t.vehiculo_tipo)}${t.km ? ' · ' + escHtml(t.km) : ''}</div></td>
+      <td style="color:#60a5fa;font-weight:600">${escHtml(t.tipo)}</td>
+      <td>${escHtml(t.descripcion)}${piezas ? `<div style="font-size:11px;color:var(--blanco-suave);margin-top:3px">Piezas: ${escHtml(piezas)}</div>` : ''}${fotos ? `<div style="font-size:11px;margin-top:3px">${fotos}</div>` : ''}</td>
+      <td style="font-weight:700;white-space:nowrap">${fmtMin(minTrabajo(t))}</td>
+      <td>${chipEstado(t.estado_final)}${t.enviado ? '' : '<div style="margin-top:4px">' + chipTexto('Borrador', 'amarillo') + '</div>'}</td>
+    </tr>`;
+  }).join('') + '</tbody></table>' : '<div class="empty-state">No hay trabajos con estos filtros.</div>';
+  document.getElementById('mt-titulo-partes').textContent = 'Partes del ' + fechaIsoAEs(dia);
+  document.getElementById('mt-partes').innerHTML = partes.length ? partes.map(p => `
+    <div class="conductor-config-row">
+      <div class="conductor-config-info"><div class="conductor-config-nombre">${escHtml(p.nombre)}</div>
+        <div class="conductor-config-pin">${p.estado === 'sin' ? 'Todavía no ha empezado' : p.n + ' trabajo' + (p.n === 1 ? '' : 's') + ' · ' + fmtMin(p.min) + (p.hora ? ' · enviado a las ' + p.hora : '')}</div></div>
+      ${p.estado === 'enviado' ? chipTexto('Enviado', 'verde') : p.estado === 'borrador' ? chipTexto('Borrador', 'amarillo') : chipTexto('Sin parte', 'gris')}
+    </div>`).join('') : '<div class="empty-state" style="padding:16px">Todavía no hay mecánicos dados de alta.</div>';
+  const pend = vehiculosPendientes();
+  document.getElementById('mt-pendientes').innerHTML = pend.length ? pend.map(t => `
+    <div class="mec-card">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="mec-matricula">${escHtml(t.matricula)}</span><span style="font-size:12px;color:var(--blanco-suave)">${escHtml(t.vehiculo_tipo)}</span></div>
+      <div style="font-size:14px;line-height:1.4">${escHtml(t.tipo)}: ${escHtml(t.descripcion)}</div>
+      <div style="font-size:12px;color:var(--blanco-suave)">${escHtml(t.mecanico)} · ${escHtml(fechaIsoAEs(t.fecha))}</div>
+      <div>${chipEstado(t.estado_final)}</div>
+    </div>`).join('') : '<div class="empty-state" style="padding:16px">Ningún vehículo con trabajo pendiente.</div>';
+}
+function csvCampo(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+function generarCSVMecanicos(filas) {
+  const cab = ['Fecha', 'Mecánico', 'Tipo de vehículo', 'Matrícula', 'Tipo de trabajo', 'Descripción', 'Horas', 'Minutos', 'Tiempo total (min)', 'Km u horas de motor', 'Piezas', 'Estado final', 'Fotos', 'Enviado'];
+  const lineas = [cab.map(csvCampo).join(';')];
+  filas.forEach(t => lineas.push([fechaIsoAEs(t.fecha), t.mecanico, t.vehiculo_tipo, t.matricula, t.tipo, t.descripcion, t.horas, t.minutos, minTrabajo(t), t.km,
+    piezasTexto(t.piezas), ESTADOS_TALLER[t.estado_final] || t.estado_final, (Array.isArray(t.fotos) ? t.fotos : []).join(' '), t.enviado ? 'Sí' : 'No'].map(csvCampo).join(';')));
+  return '\uFEFF' + lineas.join('\r\n');
+}
+function exportarMecanicosCSV() {
+  const filas = filtrarTrabajosAdmin();
+  if (!filas.length) { toast('No hay trabajos que exportar con estos filtros', 'err'); return; }
+  const blob = new Blob([generarCSVMecanicos(filas)], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'mecanicos_' + (valorCampo('mt-desde') || 'inicio') + '_a_' + (valorCampo('mt-hasta') || 'hoy') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast('✓ Archivo descargado');
+}
+
+// ---------- Configuración: gestión de mecánicos ----------
+function renderConfigMecanicos() {
+  const cont = document.getElementById('lista-mecanicos-config');
+  if (!cont) return;
+  const nombres = listaMecanicos();
+  cont.innerHTML = nombres.length ? nombres.map(n => `
+    <div class="conductor-config-row">
+      <div class="avatar" style="width:32px;height:32px;font-size:13px">${escHtml(n.charAt(0))}</div>
+      <div class="conductor-config-info"><div class="conductor-config-nombre">${escHtml(n)}</div><div class="conductor-config-pin">PIN: ${escHtml(PINES_MEC[n])}</div></div>
+      <button style="background:rgba(59,130,246,.15);border:1px solid var(--azul);color:var(--azul);border-radius:8px;padding:5px 10px;font-family:Inter,sans-serif;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="editarMecanicoUI('${escHtml(jsArg(n))}')">✏️ Editar</button>
+      <button class="btn-eliminar-conductor" onclick="eliminarMecanicoUI('${escHtml(jsArg(n))}')">✕ Eliminar</button>
+    </div>`).join('') : '<div class="empty-state" style="padding:16px">Todavía no hay mecánicos. Añade el primero arriba.</div>';
+}
+function nombreEnUso(nombre, ignorar) {
+  const k = nombre.toLowerCase();
+  return Object.keys(PINES).concat(Object.keys(PINES_MEC)).some(n => n !== ignorar && n.toLowerCase() === k);
+}
+async function añadirMecanicoUI() {
+  const nombre = valorCampo('nuevo-mec-nombre').trim(), pin = valorCampo('nuevo-mec-pin').trim();
+  if (!nombre) { toast('Escribe el nombre del mecánico', 'err'); return; }
+  if (!/^[0-9]{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos', 'err'); return; }
+  if (pin === '1994') { toast('Ese PIN está reservado', 'err'); return; }
+  if (nombreEnUso(nombre)) { toast('Ya existe un usuario con ese nombre', 'err'); return; }
+  if (Object.entries(PINES_MEC).some(([n, p]) => p === pin)) { toast('Ese PIN ya lo usa otro mecánico', 'err'); return; }
+  try {
+    const ok = await sbFetch('mecanicos', 'POST', { nombre, pin }, '');
+    if (!ok) { toast('⚠️ No se pudo guardar. Inténtalo de nuevo.', 'err'); return; }
+    PINES_MEC[nombre] = pin;
+    document.getElementById('nuevo-mec-nombre').value = ''; document.getElementById('nuevo-mec-pin').value = '';
+    actualizarSelectsConductores(); renderConfigMecanicos();
+    toast(`✓ Mecánico "${nombre}" añadido con PIN ${pin}`);
+  } catch (e) { console.error('[MECANICO] Error añadiendo:', e); toast('⚠️ Error de conexión. Inténtalo de nuevo.', 'err'); }
+}
+async function eliminarMecanicoUI(nombre) {
+  if (PINES_MEC[nombre] === undefined) return;
+  if (!confirm('¿Eliminar al mecánico "' + nombre + '"? Sus partes anteriores se conservan.')) return;
+  try {
+    const ok = await sbFetch('mecanicos', 'DELETE', null, '?nombre=eq.' + encodeURIComponent(nombre));
+    if (!ok) { toast('⚠️ No se pudo eliminar. Inténtalo de nuevo.', 'err'); return; }
+    delete PINES_MEC[nombre];
+    actualizarSelectsConductores(); renderConfigMecanicos();
+    toast(`Mecánico "${nombre}" eliminado`);
+  } catch (e) { console.error('[MECANICO] Error eliminando:', e); toast('⚠️ Error de conexión. Inténtalo de nuevo.', 'err'); }
+}
+function editarMecanicoUI(nombre) {
+  if (PINES_MEC[nombre] === undefined) return;
+  _mecEditando = nombre;
+  document.getElementById('edit-mec-nombre').value = nombre;
+  document.getElementById('edit-mec-pin').value = PINES_MEC[nombre];
+  document.getElementById('modal-editar-mecanico').style.display = 'flex';
+}
+function cerrarModalEditarMecanico() { document.getElementById('modal-editar-mecanico').style.display = 'none'; _mecEditando = null; }
+async function guardarEdicionMecanico() {
+  const viejo = _mecEditando;
+  if (!viejo || PINES_MEC[viejo] === undefined) return;
+  const nuevo = valorCampo('edit-mec-nombre').trim(), pin = valorCampo('edit-mec-pin').trim(), pinViejo = PINES_MEC[viejo];
+  if (!nuevo) { toast('Escribe el nombre del mecánico', 'err'); return; }
+  if (!/^[0-9]{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos', 'err'); return; }
+  if (pin === '1994') { toast('Ese PIN está reservado', 'err'); return; }
+  if (nombreEnUso(nuevo, viejo)) { toast('Ya existe un usuario con ese nombre', 'err'); return; }
+  if (Object.entries(PINES_MEC).some(([n, p]) => n !== viejo && p === pin)) { toast('Ese PIN ya lo usa otro mecánico', 'err'); return; }
+  if (nuevo === viejo && pin === pinViejo) { cerrarModalEditarMecanico(); return; }
+  const btn = document.getElementById('btn-guardar-mecanico');
+  if (btn) btn.disabled = true;
+  try {
+    const ok = await sbFetch('mecanicos', 'PATCH', { nombre: nuevo, pin }, '?nombre=eq.' + encodeURIComponent(viejo));
+    const v = await sbFetch('mecanicos', 'GET', null, '?nombre=eq.' + encodeURIComponent(nuevo) + '&select=nombre,pin');
+    if (!ok || !Array.isArray(v) || v.length !== 1 || v[0].pin !== pin) { toast('⚠️ No se pudo guardar el cambio. Pulsa Actualizar y comprueba el mecánico.', 'err'); return; }
+    const cambiaNombre = nuevo !== viejo;
+    if (cambiaNombre) {
+      const okTrabajos = await sbFetch('trabajos_taller', 'PATCH', { mecanico: nuevo }, '?mecanico=eq.' + encodeURIComponent(viejo));
+      if (!okTrabajos) {
+        await sbFetch('mecanicos', 'PATCH', { nombre: viejo, pin: pinViejo }, '?nombre=eq.' + encodeURIComponent(nuevo));
+        toast('⚠️ No se pudieron actualizar sus partes. No se ha cambiado nada.', 'err');
+        return;
+      }
+      delete PINES_MEC[viejo];
+      trabajosTaller.forEach(t => { if (t.mecanico === viejo) t.mecanico = nuevo; });
+    }
+    PINES_MEC[nuevo] = pin;
+    cerrarModalEditarMecanico();
+    actualizarSelectsConductores(); renderConfigMecanicos();
+    toast(cambiaNombre ? `✓ Mecánico renombrado a "${nuevo}"` : `✓ PIN de "${nuevo}" actualizado`);
+  } catch (e) { console.error('[MECANICO] Error editando:', e); toast('⚠️ Error de conexión. Pulsa Actualizar y comprueba el cambio.', 'err'); }
+  finally { if (btn) btn.disabled = false; }
+}
+/*MEC_FIN*/
+
+function refrescarVista() {
+  if (usuarioActual === 'admin') {
+    renderAdmin();
+    const t5 = document.getElementById('tab-5');
+    if (t5 && t5.classList.contains('activo')) cargarTrabajosAdmin();
+  } else if (usuarioActual && PINES_MEC[usuarioActual] !== undefined) {
+    cargarTrabajosMecanico();
+  } else if (usuarioActual) {
+    renderConductor(usuarioActual);
+  }
+}
+function renderConfig() { renderConfigConductores(); renderConfigClientes(); renderConfigMecanicos(); }
 
 async function marcarIncidenciaGestionada(id) {
   await sbFetch('incidencias', 'PATCH', {gestionada: true}, `?id=eq.${id}`);
@@ -2572,7 +3185,7 @@ try {
   if (sesionGuardada && sesionGuardada !== 'null') {
     cargarTodo(true).then(() => {
       // Verificar que el usuario sigue siendo válido
-      if (sesionGuardada === 'admin' || PINES[sesionGuardada]) {
+      if (sesionGuardada === 'admin' || PINES[sesionGuardada] || PINES_MEC[sesionGuardada] !== undefined) {
         entrar(sesionGuardada);
       } else {
         localStorage.removeItem('tc_usuario');
