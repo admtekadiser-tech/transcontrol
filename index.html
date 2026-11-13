@@ -381,6 +381,21 @@
       <div class="seccion-titulo" style="margin-bottom:0">Mi parte de hoy</div>
       <div id="mec-estado-parte"></div>
     </div>
+    <div class="mec-card" style="margin-bottom:14px">
+      <div class="label" style="margin-bottom:0">Mi jornada de hoy</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+        <div>
+          <label class="label" for="mec-hora-inicio">Hora de inicio</label>
+          <input type="time" id="mec-hora-inicio" onchange="mecGuardarJornada('hora_inicio', this.value)">
+          <button type="button" class="mec-btn-opt" style="width:100%;margin-top:8px;border-radius:10px" onclick="mecAhora('hora_inicio')">Ahora</button>
+        </div>
+        <div>
+          <label class="label" for="mec-hora-salida">Hora de salida</label>
+          <input type="time" id="mec-hora-salida" onchange="mecGuardarJornada('hora_salida', this.value)">
+          <button type="button" class="mec-btn-opt" style="width:100%;margin-top:8px;border-radius:10px" onclick="mecAhora('hora_salida')">Ahora</button>
+        </div>
+      </div>
+    </div>
     <div class="mec-resumen" id="mec-resumen"></div>
     <div id="mec-lista"></div>
     <div class="mec-acciones">
@@ -961,6 +976,8 @@ let PINES_MEC = {};            // mecánicos: nombre → PIN
 let misTrabajos = [];          // trabajos de hoy del mecánico que ha entrado
 let trabajosTaller = [];       // (administración) trabajos de los últimos 90 días
 let matriculasConocidas = [];  // matrículas ya usadas, para sugerirlas
+let miJornada = { hora_inicio: '', hora_salida: '' };  // jornada de hoy del mecánico que ha entrado
+let jornadasTaller = [];       // (administración) jornadas de los últimos 90 días
 let clientesGuardados = [];
 let rutasActivas = [];
 let incidencias = [];
@@ -1286,6 +1303,7 @@ async function entrar(val) {
     const mtd = document.getElementById('mt-desde');
     if (mtd) { mtd.value = fechaIsoLocal(); document.getElementById('mt-hasta').value = fechaIsoLocal(); }
   } else if (PINES_MEC[val] !== undefined) {
+    misTrabajos = []; miJornada = { hora_inicio: '', hora_salida: '' };
     document.getElementById('mec-nombre').textContent = val;
     document.getElementById('mec-fecha').textContent = fechaActual();
     document.getElementById('pantalla-mecanico').style.display='block';
@@ -1308,6 +1326,7 @@ function salir() {
   document.getElementById('pantalla-admin').style.display='none';
   document.getElementById('pantalla-mecanico').style.display='none';
   cerrarFormTrabajo();
+  misTrabajos = []; miJornada = { hora_inicio: '', hora_salida: '' };
   document.getElementById('select-conductor').value='';
 }
 
@@ -2728,6 +2747,8 @@ async function cargarTrabajosMecanico() {
     const filas = await sbFetch('trabajos_taller', 'GET', null, '?mecanico=eq.' + encodeURIComponent(usuarioActual) + '&fecha=eq.' + fechaIsoLocal() + '&select=*&order=created_at.asc');
     if (Array.isArray(filas)) misTrabajos = filas;
     else toast('No se pudieron cargar tus trabajos. Pulsa Actualizar.', 'err');
+    const jor = await sbFetch('jornadas_taller', 'GET', null, '?mecanico=eq.' + encodeURIComponent(usuarioActual) + '&fecha=eq.' + fechaIsoLocal() + '&select=hora_inicio,hora_salida');
+    if (Array.isArray(jor)) miJornada = jor.length ? { hora_inicio: jor[0].hora_inicio || '', hora_salida: jor[0].hora_salida || '' } : { hora_inicio: '', hora_salida: '' };
   } catch (e) { console.error('[TALLER] Error cargando trabajos:', e); toast('No se pudieron cargar tus trabajos. Pulsa Actualizar.', 'err'); }
   renderMecanico();
   try {
@@ -2762,6 +2783,9 @@ function tarjetaTrabajo(t, conBorrar) {
 function renderMecanico() {
   const lista = document.getElementById('mec-lista');
   if (!lista) return;
+  const hi = document.getElementById('mec-hora-inicio'), hs = document.getElementById('mec-hora-salida');
+  if (hi) hi.value = miJornada.hora_inicio || '';
+  if (hs) hs.value = miJornada.hora_salida || '';
   const total = misTrabajos.reduce((a, t) => a + minTrabajo(t), 0);
   const pendientes = misTrabajos.filter(t => t.estado_final !== 'operativo').length;
   const sinEnviar = misTrabajos.filter(t => !t.enviado);
@@ -2784,6 +2808,58 @@ function renderMecanico() {
     btn.style.opacity = sinEnviar.length ? '1' : '.45';
     btn.textContent = sinEnviar.length ? 'Enviar parte del día' : (misTrabajos.length ? 'Parte enviado' : 'Enviar parte del día');
   }
+}
+
+// ---------- Jornada: hora de inicio y hora de salida ----------
+const RE_HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+async function mecGuardarJornada(campo, valor) {
+  if (campo !== 'hora_inicio' && campo !== 'hora_salida') return;
+  if (!usuarioActual || PINES_MEC[usuarioActual] === undefined) return;
+  valor = String(valor || '').trim();
+  if (valor && !RE_HORA.test(valor)) { toast('Hora no válida', 'err'); renderMecanico(); return; }
+  const anterior = miJornada[campo];
+  miJornada[campo] = valor;
+  const nombre = campo === 'hora_inicio' ? 'Hora de inicio' : 'Hora de salida';
+  try {
+    const filtro = '?mecanico=eq.' + encodeURIComponent(usuarioActual) + '&fecha=eq.' + fechaIsoLocal();
+    const actualizar = () => sbFetch('jornadas_taller', 'PATCH', { [campo]: valor, updated_at: new Date().toISOString() }, filtro);
+    const ex = await sbFetch('jornadas_taller', 'GET', null, filtro + '&select=id');
+    let ok;
+    if (Array.isArray(ex) && ex.length > 0) ok = await actualizar();
+    else {
+      ok = await sbFetch('jornadas_taller', 'POST', { mecanico: usuarioActual, fecha: fechaIsoLocal(), [campo]: valor }, '');
+      if (!ok) {
+        // puede que se haya guardado a la vez la otra hora: entonces solo hay que actualizar
+        const ex2 = await sbFetch('jornadas_taller', 'GET', null, filtro + '&select=id');
+        if (Array.isArray(ex2) && ex2.length > 0) ok = await actualizar();
+      }
+    }
+    if (ok) toast('✓ ' + nombre + ': ' + (valor || 'borrada'));
+    else { miJornada[campo] = anterior; toast('⚠️ No se pudo guardar la hora. Inténtalo de nuevo.', 'err'); }
+  } catch (e) {
+    console.error('[TALLER] Error guardando jornada:', e);
+    miJornada[campo] = anterior;
+    toast('⚠️ Error de conexión. Inténtalo de nuevo.', 'err');
+  }
+  renderMecanico();
+}
+function mecAhora(campo) {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  mecGuardarJornada(campo, p(d.getHours()) + ':' + p(d.getMinutes()));
+}
+function jornadaDe(mecanico, fecha) { return jornadasTaller.find(j => j.mecanico === mecanico && j.fecha === fecha) || null; }
+function minJornada(j) {
+  if (!j || !j.hora_inicio || !j.hora_salida) return null;
+  const [h1, m1] = j.hora_inicio.split(':').map(Number), [h2, m2] = j.hora_salida.split(':').map(Number);
+  let d = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (d < 0) d += 1440;
+  return d;
+}
+function textoJornada(j) { return (!j || (!j.hora_inicio && !j.hora_salida)) ? '' : (j.hora_inicio || '--:--') + ' – ' + (j.hora_salida || '--:--'); }
+function detalleParte(p) {
+  const jor = textoJornada(p.jornada), mj = minJornada(p.jornada);
+  if (p.estado === 'sin') return p.jornada && p.jornada.hora_inicio ? 'Jornada iniciada a las ' + p.jornada.hora_inicio + ' · sin trabajos todavía' : 'Todavía no ha empezado';
+  return p.n + ' trabajo' + (p.n === 1 ? '' : 's') + ' · ' + fmtMin(p.min) + (p.hora ? ' · enviado a las ' + p.hora : '') + (jor ? ' · jornada ' + jor + (mj != null ? ' (' + fmtMin(mj) + ')' : '') : '');
 }
 
 // ---------- Formulario "Añadir trabajo" ----------
@@ -2902,6 +2978,7 @@ async function guardarTrabajoTaller() {
 async function enviarParteDelDia() {
   const sinEnviar = misTrabajos.filter(t => !t.enviado);
   if (!sinEnviar.length) { toast('No hay trabajos nuevos que enviar', 'err'); return; }
+  if (!miJornada.hora_inicio || !miJornada.hora_salida) { toast('Antes de enviar el parte, indica tu hora de inicio y tu hora de salida', 'err'); return; }
   if (!confirm('¿Enviar el parte del día con ' + sinEnviar.length + ' trabajo' + (sinEnviar.length === 1 ? '' : 's') + '?')) return;
   const btn = document.getElementById('btn-enviar-parte');
   if (btn) btn.disabled = true;
@@ -2931,6 +3008,8 @@ async function cargarTrabajosAdmin() {
     const desde = fechaIsoLocal(new Date(Date.now() - 90 * 86400000));
     const filas = await sbFetch('trabajos_taller', 'GET', null, '?select=*&fecha=gte.' + desde + '&order=fecha.desc,created_at.desc&limit=3000');
     if (Array.isArray(filas)) trabajosTaller = filas; else toast('No se pudieron cargar los partes. Pulsa Actualizar.', 'err');
+    const jor = await sbFetch('jornadas_taller', 'GET', null, '?select=*&fecha=gte.' + desde + '&limit=3000');
+    if (Array.isArray(jor)) jornadasTaller = jor;
   } catch (e) { console.error('[TALLER] Error cargando partes:', e); toast('No se pudieron cargar los partes. Pulsa Actualizar.', 'err'); }
   renderMecanicosAdmin();
 }
@@ -2946,7 +3025,7 @@ function resumenPartesDia(dia) {
     const filas = trabajosTaller.filter(t => t.fecha === dia && t.mecanico === n);
     const todosEnviados = filas.length > 0 && filas.every(t => t.enviado);
     const ult = filas.map(t => t.enviado_a).filter(Boolean).sort().pop();
-    return { nombre: n, n: filas.length, min: filas.reduce((a, t) => a + minTrabajo(t), 0), estado: !filas.length ? 'sin' : todosEnviados ? 'enviado' : 'borrador', hora: ult ? horaDeIso(ult) : '' };
+    return { nombre: n, n: filas.length, min: filas.reduce((a, t) => a + minTrabajo(t), 0), estado: !filas.length ? 'sin' : todosEnviados ? 'enviado' : 'borrador', hora: ult ? horaDeIso(ult) : '', jornada: jornadaDe(n, dia) };
   });
 }
 function vehiculosPendientes() {
@@ -2976,7 +3055,7 @@ function renderMecanicosAdmin() {
     const fotos = (Array.isArray(t.fotos) ? t.fotos : []).map((u, i) => `<a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--azul)">Foto ${i + 1}</a>`).join(' · ');
     return `<tr>
       <td style="white-space:nowrap">${escHtml(fechaIsoAEs(t.fecha))}</td>
-      <td style="font-weight:600">${escHtml(t.mecanico)}</td>
+      <td style="font-weight:600">${escHtml(t.mecanico)}${(() => { const j = textoJornada(jornadaDe(t.mecanico, t.fecha)); return j ? '<div style="font-size:11px;color:var(--blanco-suave);font-weight:400;margin-top:3px">' + escHtml(j) + '</div>' : ''; })()}</td>
       <td><span class="mec-matricula">${escHtml(t.matricula)}</span><div style="font-size:11px;color:var(--blanco-suave);margin-top:3px">${escHtml(t.vehiculo_tipo)}${t.km ? ' · ' + escHtml(t.km) : ''}</div></td>
       <td style="color:#60a5fa;font-weight:600">${escHtml(t.tipo)}</td>
       <td>${escHtml(t.descripcion)}${piezas ? `<div style="font-size:11px;color:var(--blanco-suave);margin-top:3px">Piezas: ${escHtml(piezas)}</div>` : ''}${fotos ? `<div style="font-size:11px;margin-top:3px">${fotos}</div>` : ''}</td>
@@ -2988,7 +3067,7 @@ function renderMecanicosAdmin() {
   document.getElementById('mt-partes').innerHTML = partes.length ? partes.map(p => `
     <div class="conductor-config-row">
       <div class="conductor-config-info"><div class="conductor-config-nombre">${escHtml(p.nombre)}</div>
-        <div class="conductor-config-pin">${p.estado === 'sin' ? 'Todavía no ha empezado' : p.n + ' trabajo' + (p.n === 1 ? '' : 's') + ' · ' + fmtMin(p.min) + (p.hora ? ' · enviado a las ' + p.hora : '')}</div></div>
+        <div class="conductor-config-pin">${escHtml(detalleParte(p))}</div></div>
       ${p.estado === 'enviado' ? chipTexto('Enviado', 'verde') : p.estado === 'borrador' ? chipTexto('Borrador', 'amarillo') : chipTexto('Sin parte', 'gris')}
     </div>`).join('') : '<div class="empty-state" style="padding:16px">Todavía no hay mecánicos dados de alta.</div>';
   const pend = vehiculosPendientes();
@@ -3002,9 +3081,9 @@ function renderMecanicosAdmin() {
 }
 function csvCampo(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
 function generarCSVMecanicos(filas) {
-  const cab = ['Fecha', 'Mecánico', 'Tipo de vehículo', 'Matrícula', 'Tipo de trabajo', 'Descripción', 'Horas', 'Minutos', 'Tiempo total (min)', 'Km u horas de motor', 'Piezas', 'Estado final', 'Fotos', 'Enviado'];
+  const cab = ['Fecha', 'Mecánico', 'Hora de inicio', 'Hora de salida', 'Tipo de vehículo', 'Matrícula', 'Tipo de trabajo', 'Descripción', 'Horas', 'Minutos', 'Tiempo total (min)', 'Km u horas de motor', 'Piezas', 'Estado final', 'Fotos', 'Enviado'];
   const lineas = [cab.map(csvCampo).join(';')];
-  filas.forEach(t => lineas.push([fechaIsoAEs(t.fecha), t.mecanico, t.vehiculo_tipo, t.matricula, t.tipo, t.descripcion, t.horas, t.minutos, minTrabajo(t), t.km,
+  filas.forEach(t => lineas.push([fechaIsoAEs(t.fecha), t.mecanico, (jornadaDe(t.mecanico, t.fecha) || {}).hora_inicio || '', (jornadaDe(t.mecanico, t.fecha) || {}).hora_salida || '', t.vehiculo_tipo, t.matricula, t.tipo, t.descripcion, t.horas, t.minutos, minTrabajo(t), t.km,
     piezasTexto(t.piezas), ESTADOS_TALLER[t.estado_final] || t.estado_final, (Array.isArray(t.fotos) ? t.fotos : []).join(' '), t.enviado ? 'Sí' : 'No'].map(csvCampo).join(';')));
   return '\uFEFF' + lineas.join('\r\n');
 }
@@ -3091,13 +3170,16 @@ async function guardarEdicionMecanico() {
     const cambiaNombre = nuevo !== viejo;
     if (cambiaNombre) {
       const okTrabajos = await sbFetch('trabajos_taller', 'PATCH', { mecanico: nuevo }, '?mecanico=eq.' + encodeURIComponent(viejo));
-      if (!okTrabajos) {
+      const okJornadas = okTrabajos ? await sbFetch('jornadas_taller', 'PATCH', { mecanico: nuevo }, '?mecanico=eq.' + encodeURIComponent(viejo)) : false;
+      if (!okTrabajos || !okJornadas) {
+        if (okTrabajos) await sbFetch('trabajos_taller', 'PATCH', { mecanico: viejo }, '?mecanico=eq.' + encodeURIComponent(nuevo));
         await sbFetch('mecanicos', 'PATCH', { nombre: viejo, pin: pinViejo }, '?nombre=eq.' + encodeURIComponent(nuevo));
         toast('⚠️ No se pudieron actualizar sus partes. No se ha cambiado nada.', 'err');
         return;
       }
       delete PINES_MEC[viejo];
       trabajosTaller.forEach(t => { if (t.mecanico === viejo) t.mecanico = nuevo; });
+      jornadasTaller.forEach(j => { if (j.mecanico === viejo) j.mecanico = nuevo; });
     }
     PINES_MEC[nuevo] = pin;
     cerrarModalEditarMecanico();
