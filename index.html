@@ -570,7 +570,11 @@
       <button class="btn-crear-ruta" onclick="crearRuta()">Asignar ruta al conductor</button>
     </div>
 
-    <div class="seccion-titulo" style="margin-bottom:12px;">Rutas asignadas</div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px">
+      <div class="seccion-titulo" style="margin-bottom:0">Rutas asignadas</div>
+      <input type="text" id="buscar-rutas" placeholder="🔍 Buscar ruta, conductor, cliente, fecha..." autocomplete="off" aria-label="Buscar entre las rutas asignadas" oninput="renderRutasCreadas()" style="flex:1 1 240px;width:auto;max-width:440px;padding:9px 14px;font-size:13px">
+      <span id="buscar-rutas-contador" style="font-size:12px;color:var(--blanco-suave)"></span>
+    </div>
     <div id="rutas-creadas-lista"></div>
   </div>
 
@@ -1327,6 +1331,7 @@ function salir() {
   document.getElementById('pantalla-mecanico').style.display='none';
   cerrarFormTrabajo();
   misTrabajos = []; miJornada = { hora_inicio: '', hora_salida: '' };
+  const busq = document.getElementById('buscar-rutas'); if (busq) busq.value = '';
   document.getElementById('select-conductor').value='';
 }
 
@@ -2280,13 +2285,27 @@ async function crearRuta() {
   document.getElementById('admin-fecha-servicio').value = fechaInputManana();
   quitarPDF();
   initParadas();
+  const buscador = document.getElementById('buscar-rutas'); if (buscador) buscador.value = '';
   renderRutasCreadas(); renderTiempoReal();
 }
 
+function normalizarBusqueda(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+function rutaCoincide(ruta, consulta) {
+  // Todas las palabras escritas tienen que aparecer (en cualquier campo de la ruta); sin distinguir mayúsculas ni tildes
+  const texto = normalizarBusqueda([ruta.conductor, ruta.nombreRuta, ruta.fechaServicio, ruta.horaInicio, ruta.observaciones, ruta.pdfNombre]
+    .concat((ruta.paradas || []).reduce((a, p) => a.concat([p.cliente, p.direccion]), [])).join(' '));
+  return normalizarBusqueda(consulta).split(/\s+/).filter(Boolean).every(palabra => texto.includes(palabra));
+}
 function renderRutasCreadas() {
   const cont=document.getElementById('rutas-creadas-lista');
-  if(!rutasActivas.length){cont.innerHTML=`<div class="empty-state"><div class="empty-icono">🗺️</div>Sin rutas asignadas.</div>`;return;}
-  const ordenadas = [...rutasActivas].sort((a,b)=>(a.fechaServicio||'').localeCompare(b.fechaServicio||''));
+  const campo = document.getElementById('buscar-rutas'), contador = document.getElementById('buscar-rutas-contador');
+  const consulta = campo ? campo.value.trim() : '';
+  if(!rutasActivas.length){cont.innerHTML=`<div class="empty-state"><div class="empty-icono">🗺️</div>Sin rutas asignadas.</div>`; if (contador) contador.textContent=''; return;}
+  let ordenadas = [...rutasActivas].sort((a,b)=>(a.fechaServicio||'').localeCompare(b.fechaServicio||''));
+  const totalRutas = ordenadas.length;
+  if (consulta) ordenadas = ordenadas.filter(r => rutaCoincide(r, consulta));
+  if (contador) contador.textContent = consulta ? ordenadas.length + ' de ' + totalRutas : totalRutas + ' ruta' + (totalRutas === 1 ? '' : 's');
+  if (!ordenadas.length) { cont.innerHTML = `<div class="empty-state"><div class="empty-icono">🔍</div>Ninguna ruta coincide con «${escHtml(consulta)}».</div>`; return; }
   cont.innerHTML=ordenadas.map(ruta=>`
     <div class="ruta-item">
       <div class="ruta-item-header" style="flex-wrap:wrap;gap:6px">
