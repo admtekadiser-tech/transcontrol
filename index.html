@@ -402,6 +402,29 @@
       <button class="mec-btn-sec" onclick="abrirFormTrabajo()">+ Añadir trabajo</button>
       <button class="mec-btn-prim" id="btn-enviar-parte" onclick="enviarParteDelDia()">Enviar parte del día</button>
     </div>
+    <div class="mec-card" style="margin-top:22px" id="gs-card">
+      <div class="seccion-titulo" style="margin-bottom:0">⛽ Gasoil y AdBlue</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="mec-btn-opt sel" id="gs-btn-camion" onclick="gsDestinoSet('camion')">🚛 Camión</button>
+        <button type="button" class="mec-btn-opt" id="gs-btn-conductor" onclick="gsDestinoSet('conductor')">🚗 Coche de conductor</button>
+      </div>
+      <div id="gs-campo-camion">
+        <label class="label" for="gs-matricula">Matrícula</label>
+        <input type="text" id="gs-matricula" list="gs-matriculas" placeholder="Matrícula (ej: 1234 ABC)" autocomplete="off" autocapitalize="characters">
+        <datalist id="gs-matriculas"></datalist>
+      </div>
+      <div id="gs-campo-conductor" style="display:none">
+        <label class="label" for="gs-conductor">Conductor</label>
+        <select id="gs-conductor"></select>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+        <div><label class="label" for="gs-gasoil">Litros de gasoil</label><input type="text" inputmode="decimal" id="gs-gasoil" placeholder="0" autocomplete="off"></div>
+        <div><label class="label" for="gs-adblue">Litros de AdBlue</label><input type="text" inputmode="decimal" id="gs-adblue" placeholder="0" autocomplete="off"></div>
+      </div>
+      <button type="button" class="mec-btn-prim" id="gs-btn-guardar" onclick="gsGuardar()">Guardar repostaje</button>
+      <div class="label" style="margin:6px 0 0" id="gs-titulo-hoy">Repostajes de hoy</div>
+      <div id="gs-lista-hoy"></div>
+    </div>
   </div>
 </div>
 
@@ -488,6 +511,7 @@
     <div class="tab" onclick="cambiarTab(2,this)">🗺️ Rutas</div>
     <div class="tab" onclick="cambiarTab(3,this)">⚠️ Incidencias</div>
     <div class="tab" onclick="cambiarTab(5,this)">🔧 Mecánicos</div>
+    <div class="tab" onclick="cambiarTab(6,this)">⛽ Gasoil</div>
     <div class="tab" onclick="cambiarTab(4,this)">⚙️ Config</div>
   </div>
 
@@ -602,6 +626,28 @@
         <div id="mt-partes"></div>
         <div class="config-seccion-titulo" style="margin-top:20px">Vehículos con trabajo pendiente</div>
         <div id="mt-pendientes"></div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--blanco-suave);margin-top:14px">Se cargan los últimos 90 días.</div>
+  </div>
+
+  <div class="tab-contenido" id="tab-6">
+    <div class="form-nuevo" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <div style="flex:1 1 140px"><label class="label" for="gt-desde">Desde</label><input type="date" id="gt-desde" onchange="renderGasoilAdmin()"></div>
+      <div style="flex:1 1 140px"><label class="label" for="gt-hasta">Hasta</label><input type="date" id="gt-hasta" onchange="renderGasoilAdmin()"></div>
+      <div style="flex:1 1 140px"><label class="label" for="gt-destino">Tipo</label><select id="gt-destino" onchange="renderGasoilAdmin()"><option value="">Todos</option><option value="camion">Camiones</option><option value="conductor">Coches de conductores</option></select></div>
+      <div style="flex:1 1 160px"><label class="label" for="gt-buscar">Matrícula o conductor</label><input type="text" id="gt-buscar" placeholder="Buscar..." oninput="renderGasoilAdmin()"></div>
+      <button class="btn-añadir" onclick="exportarGasoilCSV()">⬇ Exportar a Excel</button>
+    </div>
+    <div class="resumen-stats" id="gt-stats" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+      <div style="flex:999 1 560px;min-width:0">
+        <div class="config-seccion-titulo">Repostajes</div>
+        <div class="tabla-wrap" id="gt-tabla"></div>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="config-seccion-titulo">Total por matrícula / conductor</div>
+        <div id="gt-totales"></div>
       </div>
     </div>
     <div style="font-size:11px;color:var(--blanco-suave);margin-top:14px">Se cargan los últimos 90 días.</div>
@@ -1346,6 +1392,7 @@ function cambiarTab(idx, el) {
   if(idx===3) renderIncidencias();
   if(idx===4) renderConfig();
   if(idx===5) cargarTrabajosAdmin();
+  if(idx===6) cargarGasoilAdmin();
 }
 
 // ══════════════════════════════════════════
@@ -2770,6 +2817,7 @@ async function cargarTrabajosMecanico() {
     if (Array.isArray(jor)) miJornada = jor.length ? { hora_inicio: jor[0].hora_inicio || '', hora_salida: jor[0].hora_salida || '' } : { hora_inicio: '', hora_salida: '' };
   } catch (e) { console.error('[TALLER] Error cargando trabajos:', e); toast('No se pudieron cargar tus trabajos. Pulsa Actualizar.', 'err'); }
   renderMecanico();
+  cargarGasoilMecanico();
   try {
     const m = await sbFetch('trabajos_taller', 'GET', null, '?select=matricula,vehiculo_tipo&order=created_at.desc&limit=600');
     if (Array.isArray(m)) {
@@ -3207,6 +3255,136 @@ async function guardarEdicionMecanico() {
   } catch (e) { console.error('[MECANICO] Error editando:', e); toast('⚠️ Error de conexión. Pulsa Actualizar y comprueba el cambio.', 'err'); }
   finally { if (btn) btn.disabled = false; }
 }
+
+// ══════════════════════════════════════════
+// GASOIL Y ADBLUE — repostajes de camiones y coches de conductores
+// ══════════════════════════════════════════
+let gsDestino = 'camion', gsHoy = [], gasoilAdmin = [], _gsGuardando = false;
+function normMatricula(v) { return String(v || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+function parseLitros(v) { const n = parseFloat(String(v == null ? '' : v).replace(',', '.').trim()); return isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0; }
+function fmtL(n) { n = Number(n) || 0; return (Math.round(n * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 }) + ' L'; }
+function listaConductoresGs() { return Object.keys(PINES).filter(n => n !== 'admin').sort((a, b) => a.localeCompare(b, 'es')); }
+function gsDestinoSet(d) {
+  gsDestino = d;
+  const c = document.getElementById('gs-btn-camion'), k = document.getElementById('gs-btn-conductor');
+  if (c) c.className = 'mec-btn-opt' + (d === 'camion' ? ' sel' : '');
+  if (k) k.className = 'mec-btn-opt' + (d === 'conductor' ? ' sel' : '');
+  const fc = document.getElementById('gs-campo-camion'), fk = document.getElementById('gs-campo-conductor');
+  if (fc) fc.style.display = d === 'camion' ? '' : 'none';
+  if (fk) fk.style.display = d === 'conductor' ? '' : 'none';
+}
+function gsNombreDestino(r) { return r.destino === 'conductor' ? r.conductor : r.matricula; }
+function gsIcono(r) { return r.destino === 'conductor' ? '🚗' : '🚛'; }
+async function cargarGasoilMecanico() {
+  if (!usuarioActual || PINES_MEC[usuarioActual] === undefined) return;
+  const sel = document.getElementById('gs-conductor');
+  if (sel) { const v = sel.value; sel.innerHTML = '<option value="">— Elige conductor —</option>' + listaConductoresGs().map(n => '<option value="' + escHtml(n) + '">' + escHtml(n) + '</option>').join(''); sel.value = v; }
+  try {
+    const filas = await sbFetch('repostajes', 'GET', null, '?registrado_por=eq.' + encodeURIComponent(usuarioActual) + '&fecha=eq.' + fechaIsoLocal() + '&select=*&order=created_at.asc');
+    if (Array.isArray(filas)) gsHoy = filas;
+    const m = await sbFetch('repostajes', 'GET', null, '?destino=eq.camion&select=matricula&order=created_at.desc&limit=600');
+    const dl = document.getElementById('gs-matriculas');
+    if (dl) {
+      const set = {}; matriculasConocidas.forEach(x => { set[x.matricula] = 1; });
+      (Array.isArray(m) ? m : []).forEach(x => { if (x.matricula) set[normMatricula(x.matricula)] = 1; });
+      dl.innerHTML = Object.keys(set).sort().map(k => '<option value="' + escHtml(k) + '"></option>').join('');
+    }
+  } catch (e) { console.error('[GASOIL] Error cargando:', e); }
+  renderGasoilMecanico();
+}
+function renderGasoilMecanico() {
+  const cont = document.getElementById('gs-lista-hoy');
+  if (!cont) return;
+  const tg = gsHoy.reduce((a, r) => a + Number(r.litros_gasoil || 0), 0), ta = gsHoy.reduce((a, r) => a + Number(r.litros_adblue || 0), 0);
+  const t = document.getElementById('gs-titulo-hoy');
+  if (t) t.textContent = 'Repostajes de hoy' + (gsHoy.length ? ' — ' + fmtL(tg) + ' gasoil · ' + fmtL(ta) + ' AdBlue' : '');
+  if (!gsHoy.length) { cont.innerHTML = '<div style="font-size:13px;color:var(--blanco-suave)">Todavía no has apuntado ningún repostaje hoy.</div>'; return; }
+  cont.innerHTML = gsHoy.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--gris-borde)">'
+    + '<div style="min-width:0"><div style="font-weight:700;font-size:14px">' + gsIcono(r) + ' ' + escHtml(gsNombreDestino(r)) + '</div>'
+    + '<div style="font-size:12px;color:var(--blanco-suave)">' + (Number(r.litros_gasoil) ? fmtL(r.litros_gasoil) + ' gasoil' : '') + (Number(r.litros_gasoil) && Number(r.litros_adblue) ? ' · ' : '') + (Number(r.litros_adblue) ? fmtL(r.litros_adblue) + ' AdBlue' : '') + ' · ' + horaDeIso(r.created_at) + '</div></div>'
+    + '<button type="button" class="mec-btn-opt" style="min-height:36px;padding:0 12px" onclick="gsBorrar(\'' + jsArg(r.id) + '\')">Borrar</button></div>').join('');
+}
+async function gsGuardar() {
+  if (_gsGuardando) return;
+  if (!usuarioActual || PINES_MEC[usuarioActual] === undefined) return;
+  const gasoil = parseLitros(valorCampo('gs-gasoil')), adblue = parseLitros(valorCampo('gs-adblue'));
+  const matricula = normMatricula(valorCampo('gs-matricula')), conductor = valorCampo('gs-conductor').trim();
+  if (gsDestino === 'camion' && !matricula) { toast('Escribe la matrícula', 'err'); return; }
+  if (gsDestino === 'conductor' && !conductor) { toast('Elige el conductor', 'err'); return; }
+  if (!gasoil && !adblue) { toast('Pon los litros de gasoil o de AdBlue', 'err'); return; }
+  if (gasoil > 2000 || adblue > 500) { toast('Revisa los litros: parece demasiado', 'err'); return; }
+  _gsGuardando = true;
+  const btn = document.getElementById('gs-btn-guardar'); if (btn) btn.disabled = true;
+  try {
+    const fila = { fecha: fechaIsoLocal(), destino: gsDestino, matricula: gsDestino === 'camion' ? matricula : null, conductor: gsDestino === 'conductor' ? conductor : null,
+      litros_gasoil: gasoil, litros_adblue: adblue, registrado_por: usuarioActual };
+    const ok = await sbFetch('repostajes', 'POST', fila, '');
+    if (!ok) { toast('No se pudo guardar. Inténtalo otra vez.', 'err'); return; }
+    ['gs-gasoil', 'gs-adblue', 'gs-matricula'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const sel = document.getElementById('gs-conductor'); if (sel) sel.value = '';
+    toast('✓ Repostaje guardado');
+    await cargarGasoilMecanico();
+  } catch (e) { console.error('[GASOIL] Error guardando:', e); toast('No se pudo guardar. Inténtalo otra vez.', 'err'); }
+  finally { _gsGuardando = false; if (btn) btn.disabled = false; }
+}
+async function gsBorrar(id) {
+  if (!confirm('¿Borrar este repostaje?')) return;
+  const ok = await sbFetch('repostajes', 'DELETE', null, '?id=eq.' + encodeURIComponent(id));
+  if (!ok) { toast('No se pudo borrar', 'err'); return; }
+  gsHoy = gsHoy.filter(r => r.id !== id); gasoilAdmin = gasoilAdmin.filter(r => r.id !== id);
+  renderGasoilMecanico(); renderGasoilAdmin();
+  toast('✓ Repostaje borrado');
+}
+
+// ---------- Vista admin ----------
+async function cargarGasoilAdmin() {
+  const tabla = document.getElementById('gt-tabla');
+  if (tabla && !gasoilAdmin.length) tabla.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const desde = fechaIsoLocal(new Date(Date.now() - 90 * 86400000));
+    const filas = await sbFetch('repostajes', 'GET', null, '?select=*&fecha=gte.' + desde + '&order=fecha.desc,created_at.desc&limit=3000');
+    if (Array.isArray(filas)) gasoilAdmin = filas; else toast('No se pudieron cargar los repostajes. Pulsa Actualizar.', 'err');
+  } catch (e) { console.error('[GASOIL] Error cargando:', e); toast('No se pudieron cargar los repostajes. Pulsa Actualizar.', 'err'); }
+  renderGasoilAdmin();
+}
+function filtrarGasoilAdmin() {
+  const d = valorCampo('gt-desde'), h = valorCampo('gt-hasta'), dest = valorCampo('gt-destino'), q = normalizarBusqueda(valorCampo('gt-buscar').trim());
+  return gasoilAdmin.filter(r => (!d || r.fecha >= d) && (!h || r.fecha <= h) && (!dest || r.destino === dest) && (!q || normalizarBusqueda(gsNombreDestino(r)).includes(q)));
+}
+function renderGasoilAdmin() {
+  const tabla = document.getElementById('gt-tabla');
+  if (!tabla) return;
+  const f = filtrarGasoilAdmin();
+  const tg = f.reduce((a, r) => a + Number(r.litros_gasoil || 0), 0), ta = f.reduce((a, r) => a + Number(r.litros_adblue || 0), 0);
+  const camg = f.filter(r => r.destino === 'camion').reduce((a, r) => a + Number(r.litros_gasoil || 0), 0);
+  const cong = f.filter(r => r.destino === 'conductor').reduce((a, r) => a + Number(r.litros_gasoil || 0), 0);
+  const stat = (n, l) => '<div class="stat-card"><div class="stat-numero">' + n + '</div><div class="stat-label">' + l + '</div></div>';
+  document.getElementById('gt-stats').innerHTML = stat(escHtml(fmtL(tg)), 'Gasoil total') + stat(escHtml(fmtL(ta)), 'AdBlue total') + stat(escHtml(fmtL(camg)), 'Gasoil camiones') + stat(escHtml(fmtL(cong)), 'Gasoil coches conductores') + stat(f.length, 'Repostajes');
+  if (!f.length) { tabla.innerHTML = '<div class="empty-state"><div class="empty-icono">⛽</div>No hay repostajes con estos filtros.</div>'; document.getElementById('gt-totales').innerHTML = ''; return; }
+  tabla.innerHTML = '<table><thead><tr><th>Fecha</th><th>Tipo</th><th>Matrícula / Conductor</th><th>Gasoil</th><th>AdBlue</th><th>Apuntado por</th><th></th></tr></thead><tbody>'
+    + f.map(r => '<tr><td>' + escHtml(fechaIsoAEs(r.fecha)) + '</td><td>' + (r.destino === 'conductor' ? '🚗 Coche' : '🚛 Camión') + '</td><td><strong>' + escHtml(gsNombreDestino(r)) + '</strong></td><td>' + (Number(r.litros_gasoil) ? escHtml(fmtL(r.litros_gasoil)) : '—') + '</td><td>' + (Number(r.litros_adblue) ? escHtml(fmtL(r.litros_adblue)) : '—') + '</td><td>' + escHtml(r.registrado_por) + '</td><td><button type="button" class="mec-btn-opt" style="min-height:32px;padding:0 10px" onclick="gsBorrar(\'' + jsArg(r.id) + '\')">Borrar</button></td></tr>').join('')
+    + '</tbody></table>';
+  const tot = {};
+  f.forEach(r => { const k = r.destino + '|' + gsNombreDestino(r); const t = tot[k] || (tot[k] = { r, g: 0, a: 0, n: 0 }); t.g += Number(r.litros_gasoil || 0); t.a += Number(r.litros_adblue || 0); t.n++; });
+  document.getElementById('gt-totales').innerHTML = Object.values(tot).sort((x, y) => y.g - x.g).map(t => '<div class="mec-card" style="padding:10px 12px;margin-bottom:8px"><div style="font-weight:700">' + gsIcono(t.r) + ' ' + escHtml(gsNombreDestino(t.r)) + '</div><div style="font-size:12px;color:var(--blanco-suave)">' + escHtml(fmtL(t.g)) + ' gasoil · ' + escHtml(fmtL(t.a)) + ' AdBlue · ' + t.n + ' repostaje' + (t.n === 1 ? '' : 's') + '</div></div>').join('');
+}
+function generarCSVGasoil(filas) {
+  const cab = ['Fecha', 'Tipo', 'Matrícula', 'Conductor', 'Litros gasoil', 'Litros AdBlue', 'Apuntado por'];
+  const l = [cab.map(csvCampo).join(';')];
+  filas.forEach(r => l.push([fechaIsoAEs(r.fecha), r.destino === 'conductor' ? 'Coche conductor' : 'Camión', r.matricula || '', r.conductor || '', String(r.litros_gasoil).replace('.', ','), String(r.litros_adblue).replace('.', ','), r.registrado_por].map(csvCampo).join(';')));
+  return '﻿' + l.join('\r\n');
+}
+function exportarGasoilCSV() {
+  const filas = filtrarGasoilAdmin();
+  if (!filas.length) { toast('No hay repostajes que exportar con estos filtros', 'err'); return; }
+  const blob = new Blob([generarCSVGasoil(filas)], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'gasoil_' + (valorCampo('gt-desde') || 'inicio') + '_a_' + (valorCampo('gt-hasta') || 'hoy') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast('✓ Archivo descargado');
+}
 /*MEC_FIN*/
 
 function refrescarVista() {
@@ -3214,6 +3392,8 @@ function refrescarVista() {
     renderAdmin();
     const t5 = document.getElementById('tab-5');
     if (t5 && t5.classList.contains('activo')) cargarTrabajosAdmin();
+    const t6 = document.getElementById('tab-6');
+    if (t6 && t6.classList.contains('activo')) cargarGasoilAdmin();
   } else if (usuarioActual && PINES_MEC[usuarioActual] !== undefined) {
     cargarTrabajosMecanico();
   } else if (usuarioActual) {
