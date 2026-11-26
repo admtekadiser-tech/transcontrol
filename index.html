@@ -1175,6 +1175,7 @@ function getRutaId(ri) {
 // ══════════════════════════════════════════
 async function cargarTodo(mostrarLoading) {
   if (mostrarLoading) document.getElementById('loading-overlay').style.display='flex';
+  try { if (typeof vaciarRutasPendientes === 'function') await vaciarRutasPendientes(); } catch (e) {}
   try {
     const [conductoresData, clientesData, rutasData, incidenciasData, mecanicosData] = await Promise.all([
       sbFetch('conductores', 'GET', null, '?select=nombre,pin&order=nombre'),
@@ -1213,6 +1214,8 @@ async function cargarTodo(mostrarLoading) {
           fotosIncidencia: p.fotosIncidencia || (p.fotoIncidencia ? [p.fotoIncidencia] : [])
         }))
     }));
+
+    aplicarRutasPendientes();
 
     // Ordenar rutas por fecha + orden manual + hora inicio
     const fechaANum = f => { if (!f) return 0; const p = f.split('/'); return parseInt(p[2]+p[1]+p[0])||0; };
@@ -1708,7 +1711,7 @@ async function registrarHora(rutaId, pi, campo) {
 
   // Guardar SOLO si la ruta sigue existiendo (si administración la eliminó, no se vuelve a crear)
   let res = null;
-  try { res = await guardarRutaSheets(ruta, true); } catch (e) { console.error('[HORA] Error guardando ruta:', e); }
+  try { res = await guardarRutaSegura(ruta, true); } catch (e) { console.error('[HORA] Error guardando ruta:', e); }
   if (res === 'eliminada') {
     ruta.paradas[pi][campo] = anterior || null;
     toast('⚠️ Administración ha eliminado esta ruta. Actualizando...', 'err');
@@ -1774,7 +1777,7 @@ async function _enviarParadaInterno(rutaId, pi, ri) {
   }
 
   guardarRegistroSheets(usuarioActual, ruta, p, pi);
-  guardarRutaSheets(ruta);
+  guardarRutaSegura(ruta);
   guardarCalendarSheets(ruta);
 
   // Subir múltiples fotos directamente a Cloudinary (sin FileReader — compatible iOS)
@@ -2048,13 +2051,56 @@ async function guardarRutaSheets(ruta, soloActualizar) {
   }
   if (existente && existente.length > 0) {
     // Ruta existe — actualizar con PATCH
-    await sbFetch('rutas_activas', 'PATCH', body, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
-  } else {
-    // Ruta nueva — insertar con POST
-    await sbFetch('rutas_activas', 'POST', body, '');
+    const okP = await sbFetch('rutas_activas', 'PATCH', body, `?ruta_id=eq.${encodeURIComponent(ruta.rutaId)}`);
+    return okP ? true : false;
   }
-  return true;
+  // Ruta nueva — insertar con POST
+  const okI = await sbFetch('rutas_activas', 'POST', body, '');
+  return okI ? true : false;
 }
+
+// ── Guardado de ruta con reintentos: si no hay cobertura, la hora se guarda en cuanto vuelva ──
+const _RUTAS_PEND = {};   // rutaId → copia de las paradas pendientes de guardar
+const _espera = ms => new Promise(r => setTimeout(r, ms));
+async function guardarRutaSegura(ruta, soloActualizar) {
+  const id = ruta.rutaId;
+  const intentos = [0, 700, 2000];
+  for (let i = 0; i < intentos.length; i++) {
+    if (intentos[i]) await _espera(intentos[i]);
+    let res = false;
+    try { res = await guardarRutaSheets(ruta, soloActualizar); } catch (e) { console.warn('[RUTA] intento ' + (i + 1) + ' fallido:', e); }
+    if (res === 'eliminada') { delete _RUTAS_PEND[id]; return 'eliminada'; }
+    if (res === true) { delete _RUTAS_PEND[id]; return true; }
+  }
+  // No se pudo guardar: se conserva en el móvil y se reintenta solo
+  try { _RUTAS_PEND[id] = JSON.parse(JSON.stringify(ruta.paradas)); } catch (e) { _RUTAS_PEND[id] = ruta.paradas; }
+  console.error('[RUTA] No se pudo guardar la ruta ' + id + '; queda pendiente');
+  toast('⚠️ Sin conexión estable. La hora está apuntada y se guardará sola al volver la cobertura.', 'err');
+  return false;
+}
+let _vaciando = false;
+async function vaciarRutasPendientes() {
+  if (_vaciando || !Object.keys(_RUTAS_PEND).length) return;
+  _vaciando = true;
+  try {
+    for (const id of Object.keys(_RUTAS_PEND)) {
+      const ruta = rutasActivas.find(r => r.rutaId === id);
+      if (!ruta) { delete _RUTAS_PEND[id]; continue; }
+      let res = false;
+      try { res = await guardarRutaSheets(ruta, true); } catch (e) { res = false; }
+      if (res === true || res === 'eliminada') { delete _RUTAS_PEND[id]; if (res === true) toast('✓ Horas pendientes guardadas'); }
+    }
+  } finally { _vaciando = false; }
+}
+function aplicarRutasPendientes() {
+  // Tras recargar del servidor, las horas aún no guardadas no se pierden
+  Object.keys(_RUTAS_PEND).forEach(id => {
+    const r = rutasActivas.find(x => x.rutaId === id);
+    if (r) r.paradas = JSON.parse(JSON.stringify(_RUTAS_PEND[id]));
+  });
+}
+setInterval(vaciarRutasPendientes, 15000);
+window.addEventListener('online', vaciarRutasPendientes);
 
 async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor, fechaServicio, cliente) {
   if (!base64 || !base64.startsWith('data:')) return;
@@ -2076,7 +2122,7 @@ async function enviarFotoCloudinaryYGuardar(rutaId, pi, tipo, base64, conductor,
     if (ruta && ruta.paradas[pi]) {
       if (tipo === 'albaran') ruta.paradas[pi].foto = url;
       else ruta.paradas[pi].fotoIncidencia = url;
-      await guardarRutaSheets(ruta);
+      await guardarRutaSegura(ruta);
     }
     // Guardar en tabla fotos
     await sbFetch('fotos', 'POST', {
