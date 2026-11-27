@@ -1198,6 +1198,7 @@ async function cargarTodo(mostrarLoading) {
 
     rutasActivas = (rutasData||[]).map(r => ({
       rutaId: r.ruta_id,
+      orden: r.orden,
       fechaAsignada: r.fecha_asignada,
       fechaServicio: r.fecha_servicio,
       conductor: r.conductor,
@@ -2302,6 +2303,38 @@ function agregarParada() { paradaCount++; document.getElementById('inputs-parada
 function quitarParada(btn) { if (document.querySelectorAll('.parada-bloque').length<=1) return; btn.parentElement.remove(); }
 function initParadas() { paradaCount = 0; document.getElementById('inputs-paradas').innerHTML=''; agregarParada(); }
 
+const CAMPOS_PROGRESO = ['llegada', 'inicioDesc', 'finDesc', 'salida', 'incidencia', 'enviado', 'foto', 'fotoIncidencia', 'fotos', 'fotosIncidencia', 'paletsEntregados', 'paletsRecogidos', 'evoucher'];
+function hayProgresoParada(p) { return !!(p && (p.llegada || p.inicioDesc || p.finDesc || p.salida || p.enviado || p.incidencia || p.foto || p.fotoIncidencia || (p.fotos && p.fotos.length) || p.paletsEntregados || p.paletsRecogidos || p.evoucher)); }
+// Empareja cada parada nueva con una antigua del mismo cliente (en orden, sin repetir) y le copia el progreso.
+// Devuelve [{ de: índiceAntiguo, a: índiceNuevo }] de las que se han conservado.
+function conservarProgresoParadas(viejas, nuevas) {
+  const usadas = {}, res = [];
+  const clave = c => normalizarBusqueda(String(c || '')).replace(/\s+/g, ' ').trim();
+  nuevas.forEach((n, ni) => {
+    const vi = (viejas || []).findIndex((v, i) => !usadas[i] && clave(v.cliente) === clave(n.cliente) && hayProgresoParada(v));
+    if (vi < 0) return;
+    usadas[vi] = true;
+    CAMPOS_PROGRESO.forEach(c => { if (viejas[vi][c] !== undefined) n[c] = viejas[vi][c]; });
+    res.push({ de: vi, a: ni });
+  });
+  return res;
+}
+// Tras editar, las filas de `registros` se reescriben con el índice nuevo (la clave es rutaId-índice)
+async function resincronizarRegistrosTrasEdicion(ruta, conservadas) {
+  if (!conservadas.length) return;
+  const destinos = {}; conservadas.forEach(c => { destinos[c.a] = true; });
+  for (const c of conservadas) await guardarRegistroSheets(ruta.conductor, ruta, ruta.paradas[c.a], c.a);
+  // Filas antiguas que se movieron de posición: se borran solo si ya están guardadas en su sitio nuevo
+  const filas = await sbFetch('registros', 'GET', null, '?parada_key=like.' + encodeURIComponent(ruta.rutaId + '-*') + '&select=id,parada_key,cliente,llegada');
+  if (!Array.isArray(filas)) return;
+  for (const f of filas) {
+    const idx = parseInt(String(f.parada_key).split('-').pop(), 10);
+    if (destinos[idx]) continue;
+    const movida = conservadas.some(c => c.de === idx && c.a !== idx && ruta.paradas[c.a] && ruta.paradas[c.a].cliente === f.cliente && (ruta.paradas[c.a].llegada || '') === (f.llegada || ''));
+    if (movida) await sbFetch('registros', 'DELETE', null, '?id=eq.' + encodeURIComponent(f.id));
+  }
+}
+
 function crearParadaObj(cliente, direccion) {
   return { cliente, direccion, llegada:null, inicioDesc:null, finDesc:null, salida:null, incidencia:"", foto:null, fotoIncidencia:null, enviado:false };
 }
@@ -2312,6 +2345,7 @@ async function crearRuta() {
   
   // Si estamos editando, eliminar la ruta antigua primero (conservando su ruta_id)
   const idEditado = rutaEnEdicion;
+  const rutaVieja = idEditado ? rutasActivas.find(r => r.rutaId === idEditado) : null;
   if (rutaEnEdicion) {
     rutasActivas = rutasActivas.filter(r => r.rutaId !== rutaEnEdicion);
     await sbFetch('rutas_activas', 'DELETE', null, `?ruta_id=eq.${encodeURIComponent(rutaEnEdicion)}`);
@@ -2354,17 +2388,21 @@ async function crearRuta() {
       // Usar número de rutas existentes + 1, ignorando valores legacy de 999
       const ordenesValidos = rutasDelDia.map(r => r.orden || 999).filter(o => o < 900);
       const max = ordenesValidos.length > 0 ? Math.max(...ordenesValidos) : rutasDelDia.length * 10;
-      return rutaEnEdicion ? (rutasActivas.find(r=>r.rutaId===rutaEnEdicion)?.orden || max + 10) : max + 10;
+      return rutaVieja ? (rutaVieja.orden || max + 10) : max + 10;
     })(),
     pdfNombre: pdfAdminNombre, pdfData: pdfAdminData, paradas
   };
+  // Al editar una ruta se CONSERVAN las horas, fotos, palets e incidencias de las paradas que ya existían
+  let conservadas = [];
+  if (rutaVieja) conservadas = conservarProgresoParadas(rutaVieja.paradas, ruta.paradas);
   rutasActivas.push(ruta);
   // Guardar PDF en memoria para poder abrirlo sin recargar
   if (pdfAdminData && pdfAdminData.startsWith('data:')) {
     window.PDF_STORE = window.PDF_STORE || {};
     window.PDF_STORE[ruta.rutaId + '_pdf'] = pdfAdminData;
   }
-  const guardadoOk = await guardarRutaSheets(ruta);
+  const guardadoOk = await guardarRutaSegura(ruta);
+  if (rutaVieja) { try { await resincronizarRegistrosTrasEdicion(ruta, conservadas); } catch (e) { console.error('[EDITAR] Error resincronizando registros:', e); } }
   await guardarHistorialRuta(ruta);
   guardarCalendarSheets(ruta);
   toast(`✓ Ruta "${nombreRuta}" asignada a ${conductor} para el ${ruta.fechaServicio}`);
